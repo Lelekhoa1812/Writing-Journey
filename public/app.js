@@ -275,11 +275,19 @@ form.addEventListener('submit', async function(e) {
       modelAnswerOutput.innerHTML = '<b>Model Answer:</b><br>' + renderMarkdown(data.modelAnswer);
       setFormDisabled(false);
       
-      // Only show export button after confirming both correction and model answer are complete
+      // Only show export button after confirming both correction and model answer are complete and rendered
       if (data.correction && data.modelAnswer && data.correction.trim() && data.modelAnswer.trim()) {
+        // Wait for DOM to be fully updated and content to be rendered
         setTimeout(() => {
-          exportContainer.classList.remove('hidden');
-        }, 200);
+          // Double-check that the content is actually in the DOM
+          const correctionContent = correctionOutput.textContent || correctionOutput.innerText;
+          const modelAnswerContent = modelAnswerOutput.textContent || modelAnswerOutput.innerText;
+          
+          if (correctionContent && modelAnswerContent && 
+              correctionContent.length > 20 && modelAnswerContent.length > 20) {
+            exportContainer.classList.remove('hidden');
+          }
+        }, 500);
       }
     }, 600);
   } catch (err) {
