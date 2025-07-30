@@ -6,6 +6,8 @@
   <title>IELTS Enhancer</title>
   <link rel="stylesheet" href="style.css">
   <link rel="icon" type="image/png" href="img/icon.png">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
   <div class="container">
@@ -69,6 +71,14 @@
       <div id="criteria-reason-container"></div>
       <div id="correction-output"></div>
       <div id="model-answer-output"></div>
+      <div id="export-container" class="export-container hidden">
+        <button id="export-pdf-btn" class="export-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+          </svg>
+          Export PDF
+        </button>
+      </div>
     </section>
   </div>
   <!-- Draggable Chatbot Button -->

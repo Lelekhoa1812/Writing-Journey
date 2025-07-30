@@ -13,6 +13,8 @@ const correctionOutput = document.getElementById('correction-output');
 const modelAnswerOutput = document.getElementById('model-answer-output');
 const submitBtn = document.getElementById('submit-btn');
 const wordCountDiv = document.getElementById('word-count');
+const exportContainer = document.getElementById('export-container');
+const exportPdfBtn = document.getElementById('export-pdf-btn');
 
 // Loader tips
 const loaderTips = [
@@ -23,7 +25,9 @@ const loaderTips = [
   "Remember: Check your grammar and punctuation!",
   "Tip: For Part 1, always compare key features in the data.",
   "Fun fact: Examiners love clear topic sentences!",
-  "Tip: Ever heard of PER technique? This orientates your answer."
+  "Tip: Ever heard of PER technique? This orientates your answer.",
+  "Tip: Use Cohesive Devices and Complex Structures for higher bands.",
+  "Tip: For Part 2, always plan ahead of writing."
 ];
 
 function getRandomTip() {
@@ -236,6 +240,7 @@ form.addEventListener('submit', async function(e) {
   gauge.innerHTML = '';
   correctionOutput.innerHTML = '';
   modelAnswerOutput.innerHTML = '';
+  exportContainer.classList.add('hidden');
   correctionOutput.innerHTML = getLoaderHTML();
   modelAnswerOutput.innerHTML = '';
   setTimeout(startLoaderTipRotation, 50); // ensure DOM is updated
@@ -269,6 +274,13 @@ form.addEventListener('submit', async function(e) {
       correctionOutput.innerHTML = '<b>Correction & Guidance:</b><br>' + renderMarkdown(data.correction);
       modelAnswerOutput.innerHTML = '<b>Model Answer:</b><br>' + renderMarkdown(data.modelAnswer);
       setFormDisabled(false);
+      
+      // Only show export button after confirming both correction and model answer are complete
+      if (data.correction && data.modelAnswer && data.correction.trim() && data.modelAnswer.trim()) {
+        setTimeout(() => {
+          exportContainer.classList.remove('hidden');
+        }, 200);
+      }
     }, 600);
   } catch (err) {
     stopLoaderTipRotation();
@@ -286,6 +298,169 @@ function toBase64(file) {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+// PDF Export function
+async function exportToPDF() {
+  try {
+    // Show loading state
+    exportPdfBtn.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12,4V2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2V4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4Z"/>
+      </svg>
+      Generating PDF...
+    `;
+    exportPdfBtn.disabled = true;
+
+    // Create a temporary container for PDF content
+    const pdfContainer = document.createElement('div');
+    pdfContainer.style.cssText = `
+      position: absolute;
+      left: -9999px;
+      top: -9999px;
+      width: 800px;
+      background: white;
+      padding: 40px;
+      font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
+      color: #222;
+      line-height: 1.6;
+    `;
+
+    // Add header
+    const header = document.createElement('div');
+    header.innerHTML = `
+      <h1 style="color: #4b6cb7; margin: 0 0 20px 0; font-size: 28px; text-align: center;">IELTS Writing Evaluation Report</h1>
+      <div style="border-bottom: 2px solid #e1e8ed; margin-bottom: 30px; padding-bottom: 15px;">
+        <p style="margin: 5px 0; font-size: 14px;"><strong>Target Band:</strong> ${bandSelect.value}</p>
+        <p style="margin: 5px 0; font-size: 14px;"><strong>Writing Part:</strong> ${partSelect.value}</p>
+        <p style="margin: 5px 0; font-size: 14px;"><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
+      </div>
+    `;
+    pdfContainer.appendChild(header);
+
+    // Add score section
+    const scoreSection = document.createElement('div');
+    scoreSection.innerHTML = `
+      <div style="margin-bottom: 30px; text-align: center;">
+        <h2 style="color: #4b6cb7; margin: 0 0 15px 0; font-size: 24px;">Overall Score: ${scoreLabel.textContent}</h2>
+        <div style="display: flex; justify-content: space-around; margin: 20px 0;">
+          <div style="text-align: center;">
+            <div style="font-size: 18px; font-weight: bold; color: #4b6cb7;">TR</div>
+            <div style="font-size: 16px;">${document.querySelector('.submeter:nth-child(1) .submeter-score')?.textContent || 'N/A'}</div>
+          </div>
+          <div style="text-align: center;">
+            <div style="font-size: 18px; font-weight: bold; color: #4b6cb7;">CC</div>
+            <div style="font-size: 16px;">${document.querySelector('.submeter:nth-child(2) .submeter-score')?.textContent || 'N/A'}</div>
+          </div>
+          <div style="text-align: center;">
+            <div style="font-size: 18px; font-weight: bold; color: #4b6cb7;">LR</div>
+            <div style="font-size: 16px;">${document.querySelector('.submeter:nth-child(3) .submeter-score')?.textContent || 'N/A'}</div>
+          </div>
+          <div style="text-align: center;">
+            <div style="font-size: 18px; font-weight: bold; color: #4b6cb7;">GR</div>
+            <div style="font-size: 16px;">${document.querySelector('.submeter:nth-child(4) .submeter-score')?.textContent || 'N/A'}</div>
+          </div>
+        </div>
+      </div>
+    `;
+    pdfContainer.appendChild(scoreSection);
+
+    // Add correction section
+    const correctionSection = document.createElement('div');
+    correctionSection.innerHTML = `
+      <div style="margin-bottom: 30px;">
+        <h3 style="color: #4b6cb7; margin: 0 0 15px 0; font-size: 20px; border-bottom: 1px solid #e1e8ed; padding-bottom: 8px;">Correction & Guidance</h3>
+        <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; border-left: 4px solid #4b6cb7;">
+          ${correctionOutput.innerHTML.replace('<b>Correction & Guidance:</b><br>', '')}
+        </div>
+      </div>
+    `;
+    pdfContainer.appendChild(correctionSection);
+
+    // Add model answer section
+    const modelAnswerSection = document.createElement('div');
+    modelAnswerSection.innerHTML = `
+      <div style="margin-bottom: 30px;">
+        <h3 style="color: #4b6cb7; margin: 0 0 15px 0; font-size: 20px; border-bottom: 1px solid #e1e8ed; padding-bottom: 8px;">Model Answer</h3>
+        <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; border-left: 4px solid #28a745;">
+          ${modelAnswerOutput.innerHTML.replace('<b>Model Answer:</b><br>', '')}
+        </div>
+      </div>
+    `;
+    pdfContainer.appendChild(modelAnswerSection);
+
+    // Add footer
+    const footer = document.createElement('div');
+    footer.innerHTML = `
+      <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e1e8ed; text-align: center; color: #6a7ba2; font-size: 12px;">
+        <p>Generated by IELTS Enhancer - AI-powered writing feedback</p>
+      </div>
+    `;
+    pdfContainer.appendChild(footer);
+
+    // Add to document temporarily
+    document.body.appendChild(pdfContainer);
+
+    // Convert to canvas
+    const canvas = await html2canvas(pdfContainer, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff'
+    });
+
+    // Remove temporary container
+    document.body.removeChild(pdfContainer);
+
+    // Create PDF
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    
+    const imgWidth = 210; // A4 width in mm
+    const pageHeight = 295; // A4 height in mm
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    let heightLeft = imgHeight;
+
+    let position = 0;
+
+    // Add first page
+    pdf.addImage(canvas, 'PNG', 0, position, imgWidth, imgHeight);
+    heightLeft -= pageHeight;
+
+    // Add additional pages if needed
+    while (heightLeft >= 0) {
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(canvas, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+    }
+
+    // Save PDF
+    const fileName = `IELTS_Evaluation_${new Date().toISOString().split('T')[0]}.pdf`;
+    pdf.save(fileName);
+
+    // Reset button
+    exportPdfBtn.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+      </svg>
+      Export PDF
+    `;
+    exportPdfBtn.disabled = false;
+
+  } catch (error) {
+    console.error('PDF export error:', error);
+    alert('Failed to generate PDF. Please try again.');
+    
+    // Reset button
+    exportPdfBtn.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+      </svg>
+      Export PDF
+    `;
+    exportPdfBtn.disabled = false;
+  }
 }
 
 // Loader CSS (inject if not present)
@@ -314,3 +489,6 @@ hideNoteBtn.addEventListener('click', () => {
   noteCard.classList.add('hidden');
   showNoteBtn.classList.remove('hidden');
 });
+
+// Export PDF button event listener
+exportPdfBtn.addEventListener('click', exportToPDF);
