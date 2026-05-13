@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>IELTS Enhancer</title>
+  <title>Writing Journey</title>
   <link rel="stylesheet" href="style.css">
   <link rel="icon" type="image/png" href="img/icon.png">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -13,8 +13,8 @@
   <div class="app-shell">
     <header class="topbar">
       <div>
-        <p class="eyebrow">Multi-agent IELTS writing coach</p>
-        <h1>IELTS Enhancer</h1>
+        <p class="eyebrow">IELTS writing coach</p>
+        <h1>Writing Journey</h1>
       </div>
       <button type="button" id="theme-toggle" class="icon-btn" aria-label="Toggle theme" title="Toggle theme">☾</button>
     </header>
@@ -51,7 +51,11 @@
           <div class="form-row">
             <label for="question-input">Question</label>
             <textarea id="question-input" placeholder="Paste or type your IELTS question here..." rows="4"></textarea>
-            <input type="file" id="image-input" accept="image/*">
+            <div class="upload-row">
+              <input type="file" id="image-input" accept="image/*" class="file-input">
+              <label for="image-input" class="upload-btn">Upload question image</label>
+              <span id="image-file-name" class="upload-file-name">No image selected</span>
+            </div>
             <div id="image-preview"></div>
           </div>
 
@@ -76,8 +80,8 @@
       <section id="result-section" class="results-panel" aria-live="polite">
         <div id="empty-state" class="empty-state">
           <p class="eyebrow">Awaiting essay</p>
-          <h2>Your multi-agent report will appear here</h2>
-          <p>Submit an answer to see criterion evidence, sentence-level highlights, idea-depth diagnosis, coherence flow, vocabulary upgrades, grammar patterns, and a practice plan.</p>
+          <h2>Your feedback will appear here</h2>
+          <p>Send in your answer and I’ll walk you through the score, the main strengths, the spots to polish, and a clear next step for your next draft.</p>
         </div>
         <div id="loading-state" class="loading-state hidden">
           <div class="spinner"></div>

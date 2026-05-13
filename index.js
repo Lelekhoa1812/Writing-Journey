@@ -44,7 +44,7 @@ app.post('/chat-assist', async (req, res) => {
 
 if (require.main === module) {
   app.listen(PORT, () => {
-    console.log(`IELTS Enhancer listening on port ${PORT}`);
+    console.log(`Writing Journey listening on port ${PORT}`);
   });
 }
 

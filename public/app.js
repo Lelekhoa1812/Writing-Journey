@@ -3,6 +3,7 @@ const bandSelect = document.getElementById('band-select');
 const partSelect = document.getElementById('part-select');
 const questionInput = document.getElementById('question-input');
 const imageInput = document.getElementById('image-input');
+const imageFileName = document.getElementById('image-file-name');
 const imagePreview = document.getElementById('image-preview');
 const answerInput = document.getElementById('answer-input');
 const resultSection = document.getElementById('result-section');
@@ -334,6 +335,7 @@ async function exportToPDF() {
 imageInput.addEventListener('change', () => {
   clear(imagePreview);
   const file = imageInput.files[0];
+  imageFileName.textContent = file ? file.name : 'No image selected';
   if (!file) return;
   const reader = new FileReader();
   reader.onload = (event) => {
