@@ -83,6 +83,54 @@ button {
   margin-bottom: 20px;
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.mode-toggle {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(70px, 1fr));
+  gap: 4px;
+  margin: 0;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.mode-toggle label {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 36px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.mode-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mode-toggle span {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  padding: 0 12px;
+}
+
+.mode-toggle input:checked + span {
+  background: var(--accent);
+  color: var(--surface);
+}
+
 .topbar h1 {
   margin: 0;
   font-size: clamp(2rem, 4vw, 4rem);
@@ -737,5 +785,19 @@ textarea:focus {
 
   .score-label {
     font-size: 3rem;
+  }
+
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .topbar-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .mode-toggle {
+    flex: 1;
   }
 }

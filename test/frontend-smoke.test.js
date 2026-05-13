@@ -9,14 +9,26 @@ test('frontend exposes theme toggle and structured report containers', () => {
   const html = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8');
   [
     'theme-toggle',
+    'generate-question-btn',
+    'score-eyebrow',
     'criterion-bars',
     'sentence-output',
     'idea-output',
     'cohesion-output',
     'vocab-output',
     'grammar-output',
-    'agent-trace-output',
   ].forEach((id) => assert.match(html, new RegExp(`id="${id}"`)));
+});
+
+test('frontend exposes IELTS/PTE mode switching and localStorage preference', () => {
+  const html = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8');
+  const app = fs.readFileSync(path.join(root, 'public/app.js'), 'utf8');
+  assert.match(html, /name="writing-mode" value="IELTS"/);
+  assert.match(html, /name="writing-mode" value="PTE"/);
+  assert.match(app, /MODE_STORAGE_KEY = 'writing-mode'/);
+  assert.match(app, /Summarize Written Text/);
+  assert.match(app, /Write Essay/);
+  assert.match(app, /\/generate-question/);
 });
 
 test('frontend stores latest evaluation context for chat follow-ups', () => {

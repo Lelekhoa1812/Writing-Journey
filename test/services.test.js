@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const { extractJson } = require('../services/jsonUtils');
 const { calculateOverallScore, roundToHalf } = require('../services/score');
 const { normalizeEndpoint, runJsonAgent } = require('../services/azureClient');
-const { evaluateWriting } = require('../services/orchestrator');
+const { evaluateWriting, generateQuestion } = require('../services/orchestrator');
 
 test('extractJson handles fenced JSON and surrounding prose', () => {
   const parsed = extractJson('Here:\n```json\n{"TR":7,"CC":6.5,}\n```');
@@ -94,4 +94,65 @@ test('evaluateWriting assembles a multi-agent report with mocked model responses
   assert.equal(report.overview, 'You are close to band 7 but need deeper support.');
   assert.equal(report.sentenceInsights[0].issueType, 'collocation');
   assert.equal(report.agentTraceSummary.length, 7);
+});
+
+test('evaluateWriting supports PTE scoring and task context', async () => {
+  const responses = [
+    '{"taskType":"PTE Write Essay","promptRequirements":["answer the essay prompt"],"userThesis":"Agree","paragraphMap":[{"paragraph":1,"purpose":"intro","strength":"position","concern":"needs depth"}],"constraints":["200-300 words"],"wordCount":205}',
+    '{"criteria":{"Content":{"score":65,"reason":"Relevant but not fully developed","evidence":["general example"],"nextStep":"add specifics"},"Form":{"score":80,"reason":"Within range","evidence":["205 words"],"nextStep":"keep structure"},"Grammar":{"score":62,"reason":"Some errors","evidence":["article errors"],"nextStep":"proofread"},"Vocabulary":{"score":68,"reason":"Adequate range","evidence":["some repetition"],"nextStep":"vary phrasing"},"Coherence":{"score":70,"reason":"Clear flow","evidence":["logical paragraphs"],"nextStep":"improve transitions"}}}',
+    '{"diagnostics":[{"criterion":"Content","issue":"General support","rootCause":"No concrete evidence","whyItMatters":"Limits PTE content score","fixStrategy":"Add example"}],"ideaInsights":[],"cohesionMap":[]}',
+    '{"correction":"A corrected PTE draft.","sentenceInsights":[],"vocabularyUpgrades":[],"grammarPatterns":[]}',
+    '{"modelAnswer":"A target-score PTE essay.","modelAnswerNotes":["within range"]}',
+    '{"practicePlan":[{"priority":1,"focus":"Content","drill":"write one specific example","successSignal":"example is concrete"}]}',
+    '{"overview":"This is a mid-range PTE response.","targetBandGap":["content"],"topPriorities":["specific support"],"encouragement":"Keep going."}',
+  ];
+  let index = 0;
+  const report = await evaluateWriting(
+    { mode: 'PTE', targetScore: '65', part: '2', question: 'Do you agree?', answer: 'Technology helps students become independent learners. '.repeat(30) },
+    {
+      client: {},
+      callModel: async () => responses[index++],
+      model: 'main',
+      slm: 'small',
+    },
+  );
+
+  assert.equal(report.mode, 'PTE');
+  assert.equal(report.targetScore, '65');
+  assert.equal(report.taskLabel, 'Write Essay');
+  assert.equal(report.score, 69);
+  assert.equal(report.scoreScale.max, 90);
+  assert.equal(report.Content, 65);
+});
+
+test('generateQuestion returns validated SLM question output', async () => {
+  const generated = await generateQuestion(
+    { mode: 'PTE', part: '1' },
+    {
+      client: {},
+      slm: 'small',
+      callModel: async () => '{"question":"Summarize the passage.","instructions":"Write one sentence.","sourceText":"A passage about renewable energy.","recommendedWords":"5-75 words in one sentence","timeMinutes":10}',
+    },
+  );
+
+  assert.equal(generated.mode, 'PTE');
+  assert.equal(generated.taskLabel, 'Summarize Written Text');
+  assert.equal(generated.sourceText, 'A passage about renewable energy.');
+  assert.equal(generated.agentTraceSummary[0].ok, true);
+});
+
+test('generateQuestion falls back after malformed SLM output', async () => {
+  const generated = await generateQuestion(
+    { mode: 'IELTS', part: '2' },
+    {
+      client: {},
+      slm: 'small',
+      callModel: async () => '{ nope',
+    },
+  );
+
+  assert.equal(generated.mode, 'IELTS');
+  assert.equal(generated.taskLabel, 'Part 2');
+  assert.match(generated.question, /governments|people/i);
+  assert.equal(generated.agentTraceSummary[0].ok, false);
 });

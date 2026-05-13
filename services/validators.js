@@ -1,5 +1,6 @@
 const { coerceArray, coerceString } = require('./jsonUtils');
-const { CRITERIA, safeBand } = require('./score');
+const { getExamConfig } = require('./examConfig');
+const { CRITERIA, safeBand, safeScore } = require('./score');
 
 function requireObject(value, label) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -11,7 +12,7 @@ function requireObject(value, label) {
 function normalizeAnalysis(value) {
   const data = requireObject(value, 'analysis');
   return {
-    taskType: coerceString(data.taskType, 'Unknown IELTS writing task'),
+    taskType: coerceString(data.taskType, 'Unknown writing task'),
     promptRequirements: coerceArray(data.promptRequirements).map(String),
     userThesis: coerceString(data.userThesis, 'Not clearly stated'),
     paragraphMap: coerceArray(data.paragraphMap).map((item, index) => ({
@@ -25,13 +26,16 @@ function normalizeAnalysis(value) {
   };
 }
 
-function normalizeExaminer(value) {
+function normalizeExaminer(value, mode = 'IELTS') {
   const data = requireObject(value, 'examiner');
+  const config = getExamConfig(mode);
   const criteria = {};
-  CRITERIA.forEach((key) => {
+  config.criteria.forEach((key) => {
     const item = data.criteria?.[key] || data[key] || {};
     criteria[key] = {
-      score: safeBand(item.score ?? data[key]),
+      score: config.mode === 'IELTS'
+        ? safeBand(item.score ?? data[key])
+        : safeScore(item.score ?? data[key], config.scoreScale, config.scoreScale.min),
       reason: coerceString(item.reason ?? data[`${key}_reason`], 'No reason supplied.'),
       evidence: coerceArray(item.evidence).map(String).slice(0, 4),
       nextStep: coerceString(item.nextStep, 'Focus on making this criterion more precise.'),
@@ -46,7 +50,7 @@ function normalizeDiagnosis(value) {
     diagnostics: coerceArray(data.diagnostics).map((item) => ({
       issue: coerceString(item.issue, 'Issue'),
       rootCause: coerceString(item.rootCause, 'Root cause not specified'),
-      whyItMatters: coerceString(item.whyItMatters, 'This affects IELTS band clarity.'),
+      whyItMatters: coerceString(item.whyItMatters, 'This affects score clarity.'),
       fixStrategy: coerceString(item.fixStrategy, 'Revise with a clearer choice.'),
       criterion: coerceString(item.criterion, 'General'),
     })),
@@ -79,7 +83,7 @@ function normalizeCorrection(value) {
     vocabularyUpgrades: coerceArray(data.vocabularyUpgrades).map((item) => ({
       original: coerceString(item.original, ''),
       upgrade: coerceString(item.upgrade, ''),
-      reason: coerceString(item.reason, 'More precise for academic IELTS writing.'),
+      reason: coerceString(item.reason, 'More precise for academic writing.'),
     })),
     grammarPatterns: coerceArray(data.grammarPatterns).map((item) => ({
       pattern: coerceString(item.pattern, 'Grammar pattern'),
@@ -119,11 +123,24 @@ function normalizeSynthesis(value) {
   };
 }
 
+function normalizeGeneratedQuestion(value) {
+  const data = requireObject(value, 'generated question');
+  return {
+    question: coerceString(data.question, ''),
+    instructions: coerceString(data.instructions, ''),
+    sourceText: coerceString(data.sourceText, ''),
+    recommendedWords: coerceString(data.recommendedWords, ''),
+    timeMinutes: Number(data.timeMinutes) || 0,
+  };
+}
+
 module.exports = {
+  CRITERIA,
   normalizeAnalysis,
   normalizeCorrection,
   normalizeDiagnosis,
   normalizeExaminer,
+  normalizeGeneratedQuestion,
   normalizeLearningPlan,
   normalizeModelAnswer,
   normalizeSynthesis,

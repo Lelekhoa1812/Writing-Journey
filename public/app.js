@@ -15,6 +15,50 @@ const wordCountDiv = document.getElementById('word-count');
 const exportContainer = document.getElementById('export-container');
 const exportPdfBtn = document.getElementById('export-pdf-btn');
 const themeToggle = document.getElementById('theme-toggle');
+const generateQuestionBtn = document.getElementById('generate-question-btn');
+const modeRadios = [...document.querySelectorAll('input[name="writing-mode"]')];
+const reportChatInput = document.getElementById('chatbox-input');
+
+const MODE_STORAGE_KEY = 'writing-mode';
+// Motivation vs Logic: IELTS and PTE share the same writing workflow, but their labels,
+// score scales, task names, and word rules differ; keeping this UI metadata together lets
+// the mode switch update the form consistently instead of scattering exam checks everywhere.
+const examModes = {
+  IELTS: {
+    label: 'IELTS',
+    eyebrow: 'IELTS writing coach',
+    targetLabel: 'Desired Band',
+    targetPlaceholder: 'Select Band',
+    targetValues: ['4.5', '5.0', '5.5', '6.0', '6.5', '7.0', '7.5', '8.0', '8.5', '9.0'],
+    defaultTarget: '7.0',
+    scoreLabel: 'Estimated band',
+    scoreMax: 9,
+    scorePrecision: 1,
+    chatPlaceholder: 'Ask about this report or IELTS writing...',
+    questionPlaceholder: 'Paste or type your IELTS question here...',
+    tasks: {
+      1: { label: 'Part 1', minWords: 150, guidance: 'at least 150 words' },
+      2: { label: 'Part 2', minWords: 250, guidance: 'at least 250 words' },
+    },
+  },
+  PTE: {
+    label: 'PTE',
+    eyebrow: 'PTE writing coach',
+    targetLabel: 'Target Score',
+    targetPlaceholder: 'Select Score',
+    targetValues: ['10', '20', '30', '36', '42', '50', '58', '65', '73', '79', '84', '90'],
+    defaultTarget: '65',
+    scoreLabel: 'Estimated score',
+    scoreMax: 90,
+    scorePrecision: 0,
+    chatPlaceholder: 'Ask about this report or PTE writing...',
+    questionPlaceholder: 'Paste or type your PTE writing prompt here...',
+    tasks: {
+      1: { label: 'Summarize Written Text', minWords: 5, maxWords: 75, oneSentence: true, guidance: '5-75 words, one sentence' },
+      2: { label: 'Write Essay', minWords: 200, maxWords: 300, guidance: '200-300 words' },
+    },
+  },
+};
 
 const loaderTips = [
   'The examiner agent is separating score evidence from style preference.',
@@ -26,6 +70,7 @@ const loaderTips = [
 let loaderTipInterval = null;
 let currentTipIndex = 0;
 let latestEvaluationContext = null;
+let currentMode = 'IELTS';
 
 function qs(id) {
   return document.getElementById(id);
@@ -72,12 +117,71 @@ function getWordCount(text) {
   return text.trim().split(/\s+/).filter(Boolean).length;
 }
 
+function getModeConfig() {
+  return examModes[currentMode] || examModes.IELTS;
+}
+
+function getTaskConfig() {
+  const config = getModeConfig();
+  return config.tasks[partSelect.value || '1'] || config.tasks['1'];
+}
+
+function populateOptions(select, values, placeholder, preferredValue, fallbackValue) {
+  clear(select);
+  select.appendChild(createEl('option', '', placeholder));
+  select.firstChild.value = '';
+  values.forEach((value) => {
+    const option = createEl('option', '', value);
+    option.value = value;
+    select.appendChild(option);
+  });
+  select.value = values.includes(preferredValue) ? preferredValue : fallbackValue;
+}
+
+function populateTaskOptions(preferredPart) {
+  const config = getModeConfig();
+  clear(partSelect);
+  const placeholder = createEl('option', '', 'Select Task');
+  placeholder.value = '';
+  partSelect.appendChild(placeholder);
+  Object.entries(config.tasks).forEach(([value, task]) => {
+    const option = createEl('option', '', task.label);
+    option.value = value;
+    partSelect.appendChild(option);
+  });
+  partSelect.value = config.tasks[preferredPart] ? preferredPart : '';
+}
+
+function applyMode(mode) {
+  const previousPart = partSelect.value || '2';
+  currentMode = examModes[mode] ? mode : 'IELTS';
+  const config = getModeConfig();
+  localStorage.setItem(MODE_STORAGE_KEY, currentMode);
+  modeRadios.forEach((radio) => {
+    radio.checked = radio.value === currentMode;
+  });
+  setText('mode-eyebrow', config.eyebrow);
+  setText('target-label', config.targetLabel);
+  setText('part-label', currentMode === 'PTE' ? 'Writing Task' : 'Writing Part');
+  setText('score-eyebrow', config.scoreLabel);
+  questionInput.placeholder = config.questionPlaceholder;
+  if (reportChatInput) reportChatInput.placeholder = config.chatPlaceholder;
+  populateOptions(bandSelect, config.targetValues, config.targetPlaceholder, bandSelect.value || config.defaultTarget, config.defaultTarget);
+  populateTaskOptions(previousPart);
+  updateWordCount();
+}
+
+function initMode() {
+  applyMode(localStorage.getItem(MODE_STORAGE_KEY) || 'IELTS');
+}
+
 function updateWordCount() {
-  const part = partSelect.value || '1';
-  const minWords = part === '2' ? 250 : 150;
+  const task = getTaskConfig();
   const count = getWordCount(answerInput.value);
-  wordCountDiv.textContent = `${count}/${minWords} words`;
-  wordCountDiv.className = count < minWords ? 'word-count warn' : 'word-count ok';
+  const tooShort = count < task.minWords;
+  const tooLong = task.maxWords && count > task.maxWords;
+  wordCountDiv.textContent = `${count} words · ${task.guidance}`;
+  wordCountDiv.className = tooShort || tooLong ? 'word-count warn' : 'word-count ok';
 }
 
 function applyTheme(theme) {
@@ -93,7 +197,7 @@ function initTheme() {
 }
 
 function setFormDisabled(disabled) {
-  [bandSelect, partSelect, questionInput, imageInput, answerInput, submitBtn].forEach((field) => {
+  [bandSelect, partSelect, questionInput, imageInput, answerInput, submitBtn, generateQuestionBtn, ...modeRadios].forEach((field) => {
     field.disabled = disabled;
   });
   submitBtn.textContent = disabled ? 'Evaluating...' : 'Evaluate deeply';
@@ -126,14 +230,17 @@ function toBase64(file) {
 function renderCriterionBars(data) {
   const container = qs('criterion-bars');
   clear(container);
-  ['TR', 'CC', 'LR', 'GR'].forEach((key) => {
+  const criteria = Object.keys(data.criteria || {});
+  const scaleMax = data.scoreScale?.max || getModeConfig().scoreMax;
+  const precision = data.scoreScale?.precision ?? getModeConfig().scorePrecision;
+  criteria.forEach((key) => {
     const value = Number(data[key] || data.criteria?.[key]?.score || 0);
     const item = createEl('div', 'criterion-bar');
     const label = createEl('div', 'criterion-bar-label');
-    label.append(createEl('span', '', key), createEl('strong', '', value ? value.toFixed(1) : '-'));
+    label.append(createEl('span', '', key), createEl('strong', '', value ? value.toFixed(precision) : '-'));
     const track = createEl('div', 'bar-track');
     const fill = createEl('div', 'bar-fill');
-    fill.style.width = `${Math.max(0, Math.min(100, (value / 9) * 100))}%`;
+    fill.style.width = `${Math.max(0, Math.min(100, (value / scaleMax) * 100))}%`;
     track.appendChild(fill);
     item.append(label, track);
     container.appendChild(item);
@@ -146,7 +253,7 @@ function renderOverview(data) {
   const gap = qs('target-gap-output');
   clear(gap);
   (data.targetBandGap || []).forEach((item) => gap.appendChild(createEl('span', 'chip', item)));
-  if (!gap.children.length) gap.appendChild(createEl('span', 'chip', 'No target-band gap supplied'));
+  if (!gap.children.length) gap.appendChild(createEl('span', 'chip', 'No target-score gap supplied'));
 
   const priorities = qs('priority-output');
   clear(priorities);
@@ -165,12 +272,19 @@ function renderCriteria(data) {
     CC: 'Coherence & Cohesion',
     LR: 'Lexical Resource',
     GR: 'Grammar Range & Accuracy',
+    Content: 'Content',
+    Form: 'Form',
+    Grammar: 'Grammar',
+    Vocabulary: 'Vocabulary',
+    Coherence: 'Coherence',
   };
-  Object.entries(labels).forEach(([key, label]) => {
+  Object.keys(data.criteria || {}).forEach((key) => {
+    const precision = data.scoreScale?.precision ?? getModeConfig().scorePrecision;
+    const label = labels[key] || key;
     const detail = data.criteria?.[key] || {};
     const card = createEl('article', 'criterion-card');
     card.append(createEl('h3', '', `${key} · ${label}`));
-    card.append(createEl('strong', 'band-pill', `${Number(data[key] || detail.score || 0).toFixed(1)}`));
+    card.append(createEl('strong', 'band-pill', `${Number(data[key] || detail.score || 0).toFixed(precision)}`));
     card.append(createEl('p', '', detail.reason || data[`${key}_reason`] || 'No reason supplied.'));
     const list = createEl('ul', 'compact-list');
     (detail.evidence || []).forEach((evidence) => list.appendChild(createEl('li', '', evidence)));
@@ -276,6 +390,7 @@ function renderModelAndPractice(data) {
 
 function renderTrace(data) {
   const trace = qs('agent-trace-output');
+  if (!trace) return;
   clear(trace);
   (data.agentTraceSummary || []).forEach((item) => {
     const card = createEl('div', item.ok ? 'trace-card ok' : 'trace-card warn');
@@ -289,7 +404,8 @@ function renderTrace(data) {
 function renderReport(data) {
   latestEvaluationContext = data;
   window.latestEvaluationContext = data;
-  qs('score-label').textContent = Number(data.score || 0).toFixed(1);
+  const precision = data.scoreScale?.precision ?? getModeConfig().scorePrecision;
+  qs('score-label').textContent = Number(data.score || 0).toFixed(precision);
   renderCriterionBars(data);
   renderOverview(data);
   renderCriteria(data);
@@ -325,7 +441,7 @@ async function exportToPDF() {
       pdf.addImage(canvas, 'PNG', 0, position, imgWidth, imgHeight);
       heightLeft -= pageHeight;
     }
-    pdf.save(`IELTS_Evaluation_${new Date().toISOString().slice(0, 10)}.pdf`);
+    pdf.save(`${getModeConfig().label}_Evaluation_${new Date().toISOString().slice(0, 10)}.pdf`);
   } finally {
     exportPdfBtn.disabled = false;
     exportPdfBtn.textContent = 'Export PDF';
@@ -352,13 +468,59 @@ partSelect.addEventListener('change', updateWordCount);
 themeToggle.addEventListener('click', () => {
   applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
 });
+modeRadios.forEach((radio) => {
+  radio.addEventListener('change', () => {
+    if (radio.checked) applyMode(radio.value);
+  });
+});
+
+function formatGeneratedQuestion(data) {
+  const parts = [];
+  if (data.instructions) parts.push(data.instructions);
+  if (data.sourceText) parts.push(`Source Text:\n${data.sourceText}`);
+  if (data.question) parts.push(data.question);
+  if (data.recommendedWords || data.timeMinutes) {
+    parts.push([
+      data.recommendedWords ? `Recommended words: ${data.recommendedWords}` : '',
+      data.timeMinutes ? `Time: ${data.timeMinutes} minutes` : '',
+    ].filter(Boolean).join('\n'));
+  }
+  return parts.filter(Boolean).join('\n\n');
+}
+
+async function generateQuestion() {
+  const part = partSelect.value || '1';
+  generateQuestionBtn.disabled = true;
+  generateQuestionBtn.textContent = 'Generating...';
+  try {
+    const response = await fetch('/generate-question', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: currentMode, part }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Question generation failed');
+    questionInput.value = formatGeneratedQuestion(data);
+  } catch (error) {
+    window.alert(error.message || 'Could not generate a question. Please try again.');
+  } finally {
+    generateQuestionBtn.disabled = false;
+    generateQuestionBtn.textContent = 'Generate Question';
+  }
+}
 
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
   const part = partSelect.value || '1';
-  const minWords = part === '2' ? 250 : 150;
+  const task = getTaskConfig();
   const count = getWordCount(answerInput.value);
-  if (count < minWords && !window.confirm(`Your answer is below the recommended word count (${minWords} words). Continue?`)) {
+  const tooShort = count < task.minWords;
+  const tooLong = task.maxWords && count > task.maxWords;
+  const sentenceCount = answerInput.value.split(/[.!?]+/).map((sentence) => sentence.trim()).filter(Boolean).length;
+  if (task.oneSentence && sentenceCount > 1 && !window.confirm('PTE Summarize Written Text should be one sentence. Continue?')) {
+    return;
+  }
+  if ((tooShort || tooLong) && !window.confirm(`Your answer is outside the recommended range (${task.guidance}). Continue?`)) {
     return;
   }
 
@@ -377,6 +539,8 @@ form.addEventListener('submit', async (event) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        mode: currentMode,
+        targetScore: bandSelect.value,
         band: bandSelect.value,
         part,
         question: questionInput.value,
@@ -410,6 +574,8 @@ hideNoteBtn.addEventListener('click', () => {
   showNoteBtn.classList.remove('hidden');
 });
 exportPdfBtn.addEventListener('click', exportToPDF);
+generateQuestionBtn.addEventListener('click', generateQuestion);
 
 initTheme();
+initMode();
 updateWordCount();

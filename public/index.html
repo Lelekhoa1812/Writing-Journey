@@ -13,17 +13,29 @@
   <div class="app-shell">
     <header class="topbar">
       <div>
-        <p class="eyebrow">IELTS writing coach</p>
+        <p id="mode-eyebrow" class="eyebrow">IELTS writing coach</p>
         <h1>Writing Journey</h1>
       </div>
-      <button type="button" id="theme-toggle" class="icon-btn" aria-label="Toggle theme" title="Toggle theme">☾</button>
+      <div class="topbar-actions">
+        <fieldset class="mode-toggle" aria-label="Writing test mode">
+          <label>
+            <input type="radio" name="writing-mode" value="IELTS" checked>
+            <span>IELTS</span>
+          </label>
+          <label>
+            <input type="radio" name="writing-mode" value="PTE">
+            <span>PTE</span>
+          </label>
+        </fieldset>
+        <button type="button" id="theme-toggle" class="icon-btn" aria-label="Toggle theme" title="Toggle theme">☾</button>
+      </div>
     </header>
 
     <main class="workspace">
       <aside class="input-panel">
         <form id="ielts-form">
           <div class="form-row">
-            <label for="band-select">Desired Band</label>
+            <label id="target-label" for="band-select">Desired Band</label>
             <select id="band-select" required>
               <option value="">Select Band</option>
               <option value="4.5">4.5</option>
@@ -40,7 +52,7 @@
           </div>
 
           <div class="form-row">
-            <label for="part-select">Writing Part</label>
+            <label id="part-label" for="part-select">Writing Part</label>
             <select id="part-select" required>
               <option value="">Select Part</option>
               <option value="1">Part 1</option>
@@ -51,6 +63,7 @@
           <div class="form-row">
             <label for="question-input">Question</label>
             <textarea id="question-input" placeholder="Paste or type your IELTS question here..." rows="4"></textarea>
+            <button type="button" id="generate-question-btn" class="secondary-btn">Generate Question</button>
             <div class="upload-row">
               <input type="file" id="image-input" accept="image/*" class="file-input">
               <label for="image-input" class="upload-btn">Upload question image</label>
@@ -92,7 +105,7 @@
         <div id="report-content" class="report-content hidden">
           <section class="score-hero">
             <div>
-              <p class="eyebrow">Estimated band</p>
+              <p id="score-eyebrow" class="eyebrow">Estimated band</p>
               <div id="score-label" class="score-label">-</div>
             </div>
             <div id="criterion-bars" class="criterion-bars"></div>
@@ -153,10 +166,7 @@
             <div id="practice-output" class="practice-grid"></div>
           </section>
 
-          <section class="insight-section">
-            <h2>Agent Trace</h2>
-            <div id="agent-trace-output" class="trace-grid"></div>
-          </section>
+          <!-- Agent Trace intentionally hidden from the student-facing UI. -->
 
           <div id="export-container" class="export-container hidden">
             <button id="export-pdf-btn" class="secondary-btn" type="button">Export PDF</button>

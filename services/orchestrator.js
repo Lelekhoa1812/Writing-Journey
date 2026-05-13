@@ -4,11 +4,13 @@ const {
   normalizeCorrection,
   normalizeDiagnosis,
   normalizeExaminer,
+  normalizeGeneratedQuestion,
   normalizeLearningPlan,
   normalizeModelAnswer,
   normalizeSynthesis,
 } = require('./validators');
-const { calculateOverallScore, CRITERIA, getWordCount, safeBand } = require('./score');
+const { getExamConfig, getTaskConfig, normalizeMode } = require('./examConfig');
+const { calculateModeScore, getWordCount, safeBand, safeScore } = require('./score');
 const { createAzureClient, runJsonAgent, runTextAgent } = require('./azureClient');
 
 function getConfig(overrides = {}) {
@@ -20,8 +22,12 @@ function getConfig(overrides = {}) {
 }
 
 function baseInput(payload) {
+  const mode = normalizeMode(payload.mode);
+  const config = getExamConfig(mode);
   return {
-    band: payload.band || '7.0',
+    mode,
+    targetScore: payload.targetScore || payload.band || config.defaultTarget,
+    band: payload.band || (mode === 'IELTS' ? config.defaultTarget : ''),
     part: payload.part || '2',
     question: payload.question || '',
     answer: payload.answer || '',
@@ -30,9 +36,10 @@ function baseInput(payload) {
 }
 
 function fallbackAnalysis(input) {
+  const task = getTaskConfig(input.mode, input.part);
   return {
-    taskType: `IELTS Writing Part ${input.part}`,
-    promptRequirements: input.question ? [input.question] : ['Answer the supplied IELTS prompt.'],
+    taskType: task.promptLabel,
+    promptRequirements: input.question ? [input.question] : [`Answer the supplied ${task.promptLabel} prompt.`],
     userThesis: 'The thesis needs to be identified more clearly.',
     paragraphMap: input.answer.split(/\n\s*\n/).filter(Boolean).map((paragraph, index) => ({
       paragraph: index + 1,
@@ -40,15 +47,16 @@ function fallbackAnalysis(input) {
       strength: paragraph.slice(0, 100),
       concern: 'Needs specialist analysis after retry failure.',
     })),
-    constraints: [`Recommended minimum words: ${input.part === '2' ? 250 : 150}`],
+    constraints: [`Recommended words: ${task.recommendedWords}`],
     wordCount: getWordCount(input.answer),
   };
 }
 
-function fallbackExaminer() {
+function fallbackExaminer(input = {}) {
+  const config = getExamConfig(input.mode);
   return {
-    criteria: Object.fromEntries(CRITERIA.map((key) => [key, {
-      score: 0,
+    criteria: Object.fromEntries(config.criteria.map((key) => [key, {
+      score: config.mode === 'IELTS' ? 0 : config.scoreScale.min,
       reason: 'Scoring agent could not return validated JSON after retries.',
       evidence: [],
       nextStep: 'Try evaluation again, or review the diagnostic sections that did complete.',
@@ -106,13 +114,41 @@ function fallbackSynthesis() {
   };
 }
 
-function flattenCriteria(examiner) {
+function flattenCriteria(examiner, mode = 'IELTS') {
+  const config = getExamConfig(mode);
   const output = {};
-  CRITERIA.forEach((key) => {
-    output[key] = safeBand(examiner.criteria[key]?.score);
+  config.criteria.forEach((key) => {
+    output[key] = config.mode === 'IELTS'
+      ? safeBand(examiner.criteria[key]?.score)
+      : safeScore(examiner.criteria[key]?.score, config.scoreScale, config.scoreScale.min);
     output[`${key}_reason`] = examiner.criteria[key]?.reason || '';
   });
   return output;
+}
+
+function fallbackGeneratedQuestion(input = {}) {
+  const config = getExamConfig(input.mode);
+  const task = getTaskConfig(input.mode, input.part);
+  if (config.mode === 'PTE' && task.id === '1') {
+    return {
+      question: 'Read the passage below and summarize it in one sentence.',
+      instructions: 'Write one sentence between 5 and 75 words. Capture the main idea and key supporting point.',
+      sourceText: 'Many universities are redesigning their libraries to support both digital research and collaborative learning. Although online databases have reduced the need for large print collections, students still value quiet study areas, expert research support, and shared spaces for group projects. As a result, modern libraries increasingly combine technology access with flexible learning environments.',
+      recommendedWords: task.recommendedWords,
+      timeMinutes: task.timeMinutes,
+    };
+  }
+  return {
+    question: config.mode === 'PTE'
+      ? 'Some people believe that technology makes students more independent learners. To what extent do you agree or disagree?'
+      : task.id === '1'
+        ? 'The chart below shows changes in how people in one city travelled to work over a ten-year period. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.'
+        : 'Some people think that governments should invest more money in public transport than in roads. To what extent do you agree or disagree?',
+    instructions: `Write a response for ${task.promptLabel}.`,
+    sourceText: '',
+    recommendedWords: task.recommendedWords,
+    timeMinutes: task.timeMinutes,
+  };
 }
 
 function buildLegacyCorrection(correction) {
@@ -156,7 +192,7 @@ async function evaluateWriting(payload, options = {}) {
   const withAnalysis = { ...input, analysis: analysisResult.data };
 
   const [examinerResult, diagnosisResult, correctionResult, modelAnswerResult] = await Promise.all([
-    runAgent(prompts.examiner(withAnalysis), config.model, normalizeExaminer, fallbackExaminer, images),
+    runAgent(prompts.examiner(withAnalysis), config.model, (value) => normalizeExaminer(value, input.mode), () => fallbackExaminer(input), images),
     runAgent(prompts.diagnosis(withAnalysis), config.model, normalizeDiagnosis, fallbackDiagnosis, images),
     runAgent(prompts.correction(withAnalysis), config.model, normalizeCorrection, fallbackCorrection, images),
     runAgent(prompts.modelAnswer(withAnalysis), config.model, normalizeModelAnswer, fallbackModelAnswer, images),
@@ -181,10 +217,16 @@ async function evaluateWriting(payload, options = {}) {
   const synthesisResult = await runAgent(prompts.synthesis(synthesisInput), config.model, normalizeSynthesis, fallbackSynthesis);
   traces.push(synthesisResult.trace);
 
-  const flatCriteria = flattenCriteria(examinerResult.data);
-  const score = calculateOverallScore(flatCriteria);
+  const flatCriteria = flattenCriteria(examinerResult.data, input.mode);
+  const score = calculateModeScore(flatCriteria, input.mode);
+  const examConfig = getExamConfig(input.mode);
+  const taskConfig = getTaskConfig(input.mode, input.part);
 
   return {
+    mode: input.mode,
+    targetScore: input.targetScore,
+    scoreScale: examConfig.scoreScale,
+    taskLabel: taskConfig.label,
     score,
     ...flatCriteria,
     correction: buildLegacyCorrection(correctionResult.data),
@@ -227,8 +269,38 @@ async function assistChat(payload, options = {}) {
   return { reply: result.data, agentTraceSummary: [result.trace] };
 }
 
+async function generateQuestion(payload, options = {}) {
+  const config = getConfig(options);
+  const client = options.client || createAzureClient(options);
+  const input = baseInput({ ...payload, answer: '' });
+  const prompt = prompts.questionGenerator(input);
+  // Motivation vs Logic: generated questions need the same mode/task discipline as evaluation,
+  // so the SLM returns a validated prompt contract and the app falls back to authentic samples
+  // instead of placing malformed or mismatched practice text into the student's question box.
+  const result = await runJsonAgent({
+    client,
+    model: config.slm,
+    name: prompt.name,
+    system: prompt.system,
+    user: prompt.user,
+    validate: normalizeGeneratedQuestion,
+    fallback: () => fallbackGeneratedQuestion(input),
+    timeoutMs: config.timeoutMs,
+    callModel: options.callModel,
+  });
+  return {
+    ...result.data,
+    mode: input.mode,
+    part: input.part,
+    taskLabel: getTaskConfig(input.mode, input.part).label,
+    agentTraceSummary: [result.trace],
+  };
+}
+
 module.exports = {
   assistChat,
   evaluateWriting,
   fallbackAnalysis,
+  fallbackGeneratedQuestion,
+  generateQuestion,
 };

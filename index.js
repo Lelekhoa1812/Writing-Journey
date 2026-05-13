@@ -3,7 +3,7 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 
-const { assistChat, evaluateWriting } = require('./services/orchestrator');
+const { assistChat, evaluateWriting, generateQuestion } = require('./services/orchestrator');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -22,6 +22,21 @@ app.post('/evaluate', async (req, res) => {
   } catch (err) {
     return res.status(500).json({
       error: 'Failed to evaluate answer after retrying the agent workflow.',
+      details: err.message,
+    });
+  }
+});
+
+app.post('/generate-question', async (req, res) => {
+  try {
+    if (!req.body?.mode || !req.body?.part) {
+      return res.status(400).json({ error: 'Mode and writing task are required.' });
+    }
+    const question = await generateQuestion(req.body);
+    return res.json(question);
+  } catch (err) {
+    return res.status(500).json({
+      error: 'Failed to generate a writing question after retrying.',
       details: err.message,
     });
   }
