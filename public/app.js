@@ -299,15 +299,26 @@ function renderSentenceInsights(items = []) {
   clear(container);
   if (!items.length) return appendEmpty(container, 'No sentence-level insights were supplied.');
   items.forEach((item) => {
-    const detail = createEl('details', 'sentence-card');
-    const summary = createEl('summary');
-    summary.append(createEl('span', 'issue-tag', item.issueType || 'Issue'));
-    summary.append(createEl('strong', '', item.original || `Sentence ${item.sentenceNumber}`));
-    detail.appendChild(summary);
-    detail.append(createEl('p', 'revision', item.revised || 'No revision supplied.'));
-    detail.append(createEl('p', '', `Why: ${item.whyWrong || 'This weakens accuracy or clarity.'}`));
-    detail.append(createEl('p', 'principle', `Rule: ${item.principle || 'Revise for clearer control.'}`));
-    container.appendChild(detail);
+    const issueType = item.issueType || 'Issue';
+    const hasIssue = !/^no[\s_-]*issue/i.test(issueType);
+    if (hasIssue) {
+      const detail = createEl('details', 'sentence-card');
+      const summary = createEl('summary');
+      summary.append(createEl('span', 'issue-tag', issueType));
+      summary.append(createEl('strong', '', item.original || `Sentence ${item.sentenceNumber}`));
+      detail.appendChild(summary);
+      detail.append(createEl('p', 'revision', item.revised || 'No revision supplied.'));
+      detail.append(createEl('p', '', `Why: ${item.whyWrong || 'No explanation provided.'}`));
+      detail.append(createEl('p', 'principle', `Rule: ${item.principle || 'Revise for clearer control.'}`));
+      container.appendChild(detail);
+    } else {
+      const card = createEl('div', 'sentence-card');
+      const row = createEl('div', 'sentence-card-row');
+      row.append(createEl('span', 'chip', issueType));
+      row.append(createEl('span', '', item.original || `Sentence ${item.sentenceNumber}`));
+      card.appendChild(row);
+      container.appendChild(card);
+    }
   });
 }
 

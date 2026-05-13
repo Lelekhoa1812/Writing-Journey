@@ -616,10 +616,14 @@ textarea:focus {
   font-weight: 900;
 }
 
-.sentence-card summary {
+.sentence-card summary,
+.sentence-card-row {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.sentence-card summary {
   cursor: pointer;
 }
 
