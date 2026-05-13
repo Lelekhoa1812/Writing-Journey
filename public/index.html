@@ -10,95 +10,173 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
-  <div class="container">
-    <header>
-      <h1>IELTS Enhancer</h1>
-      <p>Boost your IELTS Writing with AI-powered feedback and guidance</p>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Multi-agent IELTS writing coach</p>
+        <h1>IELTS Enhancer</h1>
+      </div>
+      <button type="button" id="theme-toggle" class="icon-btn" aria-label="Toggle theme" title="Toggle theme">☾</button>
     </header>
-    <form id="ielts-form">
-      <div class="selectors">
-        <label>
-          Desired Band:
-          <select id="band-select" required>
-            <option value="">Select Band</option>
-            <option value="4.5">4.5</option>
-            <option value="5.0">5.0</option>
-            <option value="5.5">5.5</option>
-            <option value="6.0">6.0</option>
-            <option value="6.5">6.5</option>
-            <option value="7.0">7.0</option>
-            <option value="7.5">7.5</option>
-            <option value="8.0">8.0</option>
-            <option value="8.5">8.5</option>
-            <option value="9.0">9.0</option>
-          </select>
-        </label>
-        <label>
-          Writing Part:
-          <select id="part-select" required>
-            <option value="">Select Part</option>
-            <option value="1">Part 1</option>
-            <option value="2">Part 2</option>
-          </select>
-        </label>
-      </div>
-      <div class="input-group">
-        <label for="question-input">Question (text and image if available):</label>
-        <textarea id="question-input" placeholder="Paste or type your IELTS question here..." rows="2"></textarea>
-        <input type="file" id="image-input" accept="image/*">
-        <div id="image-preview"></div>
-      </div>
-      <div id="note-card-container">
-        <button type="button" id="show-note-btn" class="note-btn">Create Note Card</button>
-        <div id="note-card" class="note-card hidden">
-          <textarea id="note-input" placeholder="Write your notes here..." rows="3"></textarea>
-          <button type="button" id="hide-note-btn" class="note-btn">Hide Note Card</button>
+
+    <main class="workspace">
+      <aside class="input-panel">
+        <form id="ielts-form">
+          <div class="form-row">
+            <label for="band-select">Desired Band</label>
+            <select id="band-select" required>
+              <option value="">Select Band</option>
+              <option value="4.5">4.5</option>
+              <option value="5.0">5.0</option>
+              <option value="5.5">5.5</option>
+              <option value="6.0">6.0</option>
+              <option value="6.5">6.5</option>
+              <option value="7.0">7.0</option>
+              <option value="7.5">7.5</option>
+              <option value="8.0">8.0</option>
+              <option value="8.5">8.5</option>
+              <option value="9.0">9.0</option>
+            </select>
+          </div>
+
+          <div class="form-row">
+            <label for="part-select">Writing Part</label>
+            <select id="part-select" required>
+              <option value="">Select Part</option>
+              <option value="1">Part 1</option>
+              <option value="2">Part 2</option>
+            </select>
+          </div>
+
+          <div class="form-row">
+            <label for="question-input">Question</label>
+            <textarea id="question-input" placeholder="Paste or type your IELTS question here..." rows="4"></textarea>
+            <input type="file" id="image-input" accept="image/*">
+            <div id="image-preview"></div>
+          </div>
+
+          <div id="note-card-container">
+            <button type="button" id="show-note-btn" class="secondary-btn">Create Note Card</button>
+            <div id="note-card" class="note-card hidden">
+              <textarea id="note-input" placeholder="Planning notes..." rows="4"></textarea>
+              <button type="button" id="hide-note-btn" class="secondary-btn">Hide Note Card</button>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <label for="answer-input">Your Answer</label>
+            <textarea id="answer-input" placeholder="Paste or type your answer here..." rows="12" required></textarea>
+            <div id="word-count" class="word-count"></div>
+          </div>
+
+          <button type="submit" id="submit-btn" class="primary-btn">Evaluate deeply</button>
+        </form>
+      </aside>
+
+      <section id="result-section" class="results-panel" aria-live="polite">
+        <div id="empty-state" class="empty-state">
+          <p class="eyebrow">Awaiting essay</p>
+          <h2>Your multi-agent report will appear here</h2>
+          <p>Submit an answer to see criterion evidence, sentence-level highlights, idea-depth diagnosis, coherence flow, vocabulary upgrades, grammar patterns, and a practice plan.</p>
         </div>
-      </div>
-      <div class="input-group">
-        <label for="answer-input">Your Answer:</label>
-        <textarea id="answer-input" placeholder="Paste or type your answer here..." rows="6" required></textarea>
-        <div id="word-count" style="margin-top:0.3em;font-weight:600;font-size:1.02em;"></div>
-      </div>
-      <button type="submit" id="submit-btn">Evaluate</button>
-    </form>
-    <section id="result-section" class="hidden">
-      <div class="gauge-container">
-        <svg id="gauge" width="220" height="120"></svg>
-        <div id="score-label"></div>
-      </div>
-      <div id="submeter-container"></div>
-      <div id="criteria-reason-container"></div>
-      <div id="correction-output"></div>
-      <div id="model-answer-output"></div>
-      <div id="export-container" class="export-container hidden">
-        <button id="export-pdf-btn" class="export-btn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
-          </svg>
-          Export PDF
-        </button>
-      </div>
-    </section>
+        <div id="loading-state" class="loading-state hidden">
+          <div class="spinner"></div>
+          <p>Specialist agents are reading your essay...</p>
+          <span id="loader-tip"></span>
+        </div>
+
+        <div id="report-content" class="report-content hidden">
+          <section class="score-hero">
+            <div>
+              <p class="eyebrow">Estimated band</p>
+              <div id="score-label" class="score-label">-</div>
+            </div>
+            <div id="criterion-bars" class="criterion-bars"></div>
+          </section>
+
+          <section class="insight-section">
+            <h2>Teacher Overview</h2>
+            <p id="overview-output"></p>
+            <div id="target-gap-output" class="chip-row"></div>
+            <div id="priority-output" class="priority-list"></div>
+          </section>
+
+          <section class="insight-section">
+            <h2>Criterion Evidence</h2>
+            <div id="criteria-output" class="criteria-grid"></div>
+          </section>
+
+          <section class="insight-section">
+            <h2>Sentence Clinic</h2>
+            <div id="sentence-output" class="sentence-list"></div>
+          </section>
+
+          <section class="insight-section two-column">
+            <div>
+              <h2>Idea Depth</h2>
+              <div id="idea-output" class="stack"></div>
+            </div>
+            <div>
+              <h2>Coherence Flow</h2>
+              <div id="cohesion-output" class="flow-list"></div>
+            </div>
+          </section>
+
+          <section class="insight-section two-column">
+            <div>
+              <h2>Vocabulary Upgrades</h2>
+              <div id="vocab-output" class="table-wrap"></div>
+            </div>
+            <div>
+              <h2>Grammar Patterns</h2>
+              <div id="grammar-output" class="stack"></div>
+            </div>
+          </section>
+
+          <section class="insight-section">
+            <h2>Corrected Draft</h2>
+            <div id="correction-output" class="prose"></div>
+          </section>
+
+          <section class="insight-section">
+            <h2>Model Answer</h2>
+            <div id="model-answer-output" class="prose"></div>
+            <ul id="model-notes-output" class="compact-list"></ul>
+          </section>
+
+          <section class="insight-section">
+            <h2>Practice Plan</h2>
+            <div id="practice-output" class="practice-grid"></div>
+          </section>
+
+          <section class="insight-section">
+            <h2>Agent Trace</h2>
+            <div id="agent-trace-output" class="trace-grid"></div>
+          </section>
+
+          <div id="export-container" class="export-container hidden">
+            <button id="export-pdf-btn" class="secondary-btn" type="button">Export PDF</button>
+          </div>
+        </div>
+      </section>
+    </main>
   </div>
-  <!-- Draggable Chatbot Button -->
-  <div id="draggable-chatbot" class="draggable-chatbot" title="AI Assistant: Instantly ready to help you brainstorm, clarify, or answer any IELTS writing question. Just drag me or click to chat!">
-    <img src="img/chatbot.gif" alt="AI Chatbot" class="chatbot-icon" />
+
+  <div id="draggable-chatbot" class="draggable-chatbot" title="AI Assistant">
+    <img src="img/chatbot.gif" alt="AI Chatbot" class="chatbot-icon">
   </div>
-  <!-- Chatbox -->
   <div id="chatbox" class="chatbox hidden">
     <div class="chatbox-header">
       <span>AI Writing Assistant</span>
-      <button id="close-chatbox" class="close-chatbox">&times;</button>
+      <button id="close-chatbox" class="close-chatbox" type="button" aria-label="Close chat">×</button>
     </div>
     <div id="chatbox-messages" class="chatbox-messages"></div>
     <form id="chatbox-form" class="chatbox-form">
-      <div class="chatbox-input-wrapper">
-        <textarea id="chatbox-input" placeholder="Ask me anything about IELTS writing..." autocomplete="off" required rows="2" maxlength="1000"></textarea>
-      </div>
+      <textarea id="chatbox-input" placeholder="Ask about this report or IELTS writing..." autocomplete="off" required rows="2" maxlength="1000"></textarea>
       <button type="submit">Send</button>
     </form>
   </div>
+
   <script src="draggable.js"></script>
   <script src="chatbox.js"></script>
   <script src="app.js"></script>
