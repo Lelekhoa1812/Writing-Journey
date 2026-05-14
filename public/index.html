@@ -28,6 +28,7 @@
           </label>
         </fieldset>
         <button type="button" id="theme-toggle" class="icon-btn" aria-label="Toggle theme" title="Toggle theme">☾</button>
+        <button type="button" id="timer-toggle" class="icon-btn" aria-label="Exam timer" title="Exam timer">⏱</button>
       </div>
     </header>
 
@@ -61,8 +62,19 @@
           </div>
 
           <div class="form-row">
-            <label for="question-input">Question</label>
-            <textarea id="question-input" placeholder="Paste or type your IELTS question here..." rows="4"></textarea>
+            <label for="question-display">Question</label>
+            <div class="annotation-toolbar" id="annotation-toolbar">
+              <button type="button" id="btn-highlight" class="annotation-btn" title="Highlight (Ctrl/Cmd+H)">
+                <span class="annotation-icon hl-icon">A</span> Highlight
+              </button>
+              <button type="button" id="btn-underline" class="annotation-btn" title="Underline (Ctrl/Cmd+U)">
+                <span class="annotation-icon ul-icon">A</span> Underline
+              </button>
+            </div>
+            <div id="question-display" class="question-display" contenteditable="true"
+                 data-placeholder="Paste or type your IELTS question here..."
+                 spellcheck="false"></div>
+            <textarea id="question-input" style="display:none" aria-hidden="true" tabindex="-1"></textarea>
             <button type="button" id="generate-question-btn" class="secondary-btn">Generate Question</button>
             <div class="upload-row">
               <input type="file" id="image-input" accept="image/*" class="file-input">
@@ -81,7 +93,10 @@
           </div>
 
           <div class="form-row">
-            <label for="answer-input">Your Answer</label>
+            <div class="answer-label-row">
+              <label for="answer-input">Your Answer</label>
+              <button type="button" id="expand-answer-btn" class="icon-btn expand-answer-btn" title="Expand editor" aria-label="Expand answer editor">&lt;&gt;</button>
+            </div>
             <textarea id="answer-input" placeholder="Paste or type your answer here..." rows="12" required></textarea>
             <div id="word-count" class="word-count"></div>
           </div>
@@ -97,9 +112,21 @@
           <p>Send in your answer and I’ll walk you through the score, the main strengths, the spots to polish, and a clear next step for your next draft.</p>
         </div>
         <div id="loading-state" class="loading-state hidden">
-          <div class="spinner"></div>
-          <p>Specialist agents are reading your essay...</p>
-          <span id="loader-tip"></span>
+          <div class="loader-orb-wrap">
+            <div class="loader-glow"></div>
+            <div class="lr-ring lr-ring-1"></div>
+            <div class="lr-ring lr-ring-2"></div>
+            <div class="lr-ring lr-ring-3"></div>
+            <div class="lr-core"></div>
+          </div>
+          <p class="loader-headline">Specialist agents are reading your essay…</p>
+          <div class="loader-agents">
+            <div class="loader-agent"><div class="agent-pip"></div><span>Examiner</span></div>
+            <div class="loader-agent"><div class="agent-pip"></div><span>Diagnosis</span></div>
+            <div class="loader-agent"><div class="agent-pip"></div><span>Coach</span></div>
+            <div class="loader-agent"><div class="agent-pip"></div><span>Synthesis</span></div>
+          </div>
+          <span id="loader-tip" class="loader-tip"></span>
         </div>
 
         <div id="report-content" class="report-content hidden">
@@ -153,6 +180,7 @@
           <section class="insight-section">
             <h2>Corrected Draft</h2>
             <div id="correction-output" class="prose"></div>
+            <ul id="correction-notes-output" class="compact-list"></ul>
           </section>
 
           <section class="insight-section">
@@ -191,8 +219,105 @@
     </form>
   </div>
 
+  <div id="answer-modal-overlay" class="answer-modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="answer-modal-title">
+    <div class="answer-modal">
+      <div class="answer-modal-header">
+        <span id="answer-modal-title">Your Answer</span>
+        <button type="button" id="collapse-answer-btn" class="icon-btn" title="Collapse editor" aria-label="Collapse editor">&gt;&lt;</button>
+      </div>
+      <textarea id="answer-modal-input" class="answer-modal-textarea" placeholder="Paste or type your answer here..."></textarea>
+      <div id="answer-modal-word-count" class="word-count answer-modal-word-count"></div>
+    </div>
+  </div>
+
+  <div id="note-popup" class="note-popup hidden">
+    <div class="note-popup-header">
+      <span>Add Note</span>
+      <button type="button" id="note-popup-cancel" class="note-popup-close" aria-label="Close">×</button>
+    </div>
+    <textarea id="note-popup-text" class="note-popup-input" placeholder="Type your note..." rows="3"></textarea>
+    <div class="note-popup-actions">
+      <button type="button" id="note-popup-save" class="annotation-btn-sm primary">Save</button>
+      <button type="button" id="note-popup-delete" class="annotation-btn-sm danger hidden">Delete Note</button>
+    </div>
+  </div>
+
+  <!-- Timer Panel -->
+  <div id="timer-panel" class="timer-panel hidden">
+    <div class="timer-panel-header">
+      <span>Exam Timer</span>
+      <button id="close-timer" class="close-timer" type="button" aria-label="Close timer">×</button>
+    </div>
+    <div class="timer-body">
+      <div class="timer-ring-wrap">
+        <svg class="timer-ring" viewBox="0 0 120 120" aria-hidden="true">
+          <circle class="timer-ring-bg" cx="60" cy="60" r="54"/>
+          <circle class="timer-ring-fill" cx="60" cy="60" r="54" id="timer-ring-fill"/>
+        </svg>
+        <div class="timer-display">
+          <span id="timer-display">00:00</span>
+          <span id="timer-status" class="timer-status-text">Set a time</span>
+        </div>
+      </div>
+
+      <div class="timer-presets">
+        <span class="timer-section-label">Quick select</span>
+        <div class="timer-preset-chips">
+          <button class="timer-chip" data-minutes="5" type="button">5m</button>
+          <button class="timer-chip" data-minutes="10" type="button">10m</button>
+          <button class="timer-chip" data-minutes="20" type="button">20m</button>
+          <button class="timer-chip" data-minutes="30" type="button">30m</button>
+          <button class="timer-chip" data-minutes="45" type="button">45m</button>
+          <button class="timer-chip" data-minutes="60" type="button">60m</button>
+          <button class="timer-chip" data-minutes="90" type="button">90m</button>
+        </div>
+      </div>
+
+      <div class="timer-custom">
+        <span class="timer-section-label">Custom</span>
+        <div class="timer-custom-inputs">
+          <div class="timer-input-group">
+            <input type="number" id="timer-min-input" class="timer-number-input" min="0" max="99" value="0" placeholder="00" aria-label="Minutes">
+            <span class="timer-unit">min</span>
+          </div>
+          <span class="timer-sep">:</span>
+          <div class="timer-input-group">
+            <input type="number" id="timer-sec-input" class="timer-number-input" min="0" max="59" value="0" placeholder="00" aria-label="Seconds">
+            <span class="timer-unit">sec</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="timer-controls">
+        <button id="timer-start" class="timer-btn timer-btn-primary" type="button" disabled>Start</button>
+        <button id="timer-reset" class="timer-btn timer-btn-secondary" type="button">Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Timer Timeout Overlay -->
+  <div id="timer-timeout-overlay" class="timer-timeout-overlay hidden" role="dialog" aria-modal="true" aria-label="Time's up">
+    <div class="timer-timeout-backdrop"></div>
+    <div class="timer-timeout-bg-ring" style="width:200px;height:200px"></div>
+    <div class="timer-timeout-bg-ring" style="width:200px;height:200px"></div>
+    <div class="timer-timeout-bg-ring" style="width:200px;height:200px"></div>
+    <div id="timer-particles" class="timer-particles"></div>
+    <div class="timer-timeout-card">
+      <div class="timer-timeout-icon-wrap">
+        <div class="timer-timeout-pulse-ring"></div>
+        <div class="timer-timeout-pulse-ring"></div>
+        <span class="timer-timeout-clock">⏰</span>
+      </div>
+      <h2 class="timer-timeout-title">Time's Up!</h2>
+      <p class="timer-timeout-sub">Your session has ended. Great work!</p>
+      <button id="timer-timeout-dismiss" class="timer-timeout-btn" type="button">Continue Writing</button>
+    </div>
+  </div>
+
   <script src="draggable.js"></script>
+  <script src="annotations.js"></script>
   <script src="chatbox.js"></script>
   <script src="app.js"></script>
+  <script src="timer.js"></script>
 </body>
 </html>

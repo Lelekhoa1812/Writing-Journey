@@ -82,7 +82,7 @@ function correction(input) {
   return {
     name: 'Correction Coach Agent',
     system: `${copy.correction} ${jsonRule}`,
-    user: `${commonContext(input)}\n\nReturn JSON: {"correction":"Use ~~wrong~~ **correct** markdown in context.","sentenceInsights":[{"sentenceNumber":1,"original":"","revised":"","issueType":"","whyWrong":"","principle":""}],"vocabularyUpgrades":[{"original":"","upgrade":"","reason":""}],"grammarPatterns":[{"pattern":"","problem":"","exampleFix":""}]}`,
+    user: `${commonContext(input)}\n\nReturn JSON: {"correction":"Reproduce the full student draft exactly. For every error, wrap the bad phrase inline as <->bad phrase</-> immediately followed by <+>fixed phrase</+>. Leave all correct text unchanged. Do not use any other markdown.","correctionNotes":["Fix 'X' to 'Y' because ...", "To aim for the target score, you should ..."],"sentenceInsights":[{"sentenceNumber":1,"original":"","revised":"","issueType":"","whyWrong":"","principle":""}],"vocabularyUpgrades":[{"original":"","upgrade":"","reason":""}],"grammarPatterns":[{"pattern":"","problem":"","exampleFix":""}]}`,
   };
 }
 
@@ -132,11 +132,11 @@ function questionGenerator(input) {
   const task = getTaskConfig(input.mode, input.part);
   const pteSwt = config.mode === MODE_PTE && task.id === '1';
   const taskSpecific = pteSwt
-    ? 'Generate an academic source passage of 180-260 words and ask the student to summarize it in one sentence of 5-75 words.'
-    : `Generate a realistic ${task.promptLabel} writing prompt with clear instructions and no model answer.`;
+    ? 'Generate an academic source passage of 180-260 words as sourceText. Set question to a one-sentence instruction asking the student to summarize it in 5-75 words. Leave instructions empty.'
+    : `Generate a realistic ${task.promptLabel} writing prompt. The question field must contain the full scenario and task directive (e.g. "Some people believe X while others argue Y. Discuss both views and give your own opinion."). Do NOT put generic essay-writing directions (word-count advice, timing, or meta-instructions) in the instructions field — leave instructions empty.`;
   return {
     name: `${config.label} Question Generator Agent`,
-    system: `You create authentic ${config.label} writing practice questions. ${taskSpecific} ${jsonRule}`,
+    system: `You create authentic ${config.label} writing practice questions that follow the official exam format exactly. ${taskSpecific} ${jsonRule}`,
     user: `Mode: ${config.label}\nTask: ${task.promptLabel}\nRecommended words: ${task.recommendedWords}\nTime minutes: ${task.timeMinutes}\n\nReturn JSON: {"question":"","instructions":"","sourceText":"","recommendedWords":"${task.recommendedWords}","timeMinutes":${task.timeMinutes}}`,
   };
 }

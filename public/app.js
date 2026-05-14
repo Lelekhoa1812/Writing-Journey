@@ -2,6 +2,7 @@ const form = document.getElementById('ielts-form');
 const bandSelect = document.getElementById('band-select');
 const partSelect = document.getElementById('part-select');
 const questionInput = document.getElementById('question-input');
+const questionDisplay = document.getElementById('question-display');
 const imageInput = document.getElementById('image-input');
 const imageFileName = document.getElementById('image-file-name');
 const imagePreview = document.getElementById('image-preview');
@@ -113,6 +114,25 @@ function renderSafeMarkdown(md = '') {
     .replace(/\n/g, '<br>');
 }
 
+function renderCorrectedDraft(text = '') {
+  const tagPattern = /<->([\s\S]*?)<\/->|<\+>([\s\S]*?)<\/\+>/g;
+  let lastIndex = 0;
+  let match;
+  let html = '';
+  const escapePlain = (s) => escapeHTML(s).replace(/\n/g, '<br>');
+  while ((match = tagPattern.exec(text)) !== null) {
+    html += escapePlain(text.slice(lastIndex, match.index));
+    if (match[1] !== undefined) {
+      html += `<span class="correction-del">${escapeHTML(match[1])}</span>`;
+    } else {
+      html += `<span class="correction-ins">${escapeHTML(match[2])}</span>`;
+    }
+    lastIndex = match.index + match[0].length;
+  }
+  html += escapePlain(text.slice(lastIndex));
+  return html;
+}
+
 function getWordCount(text) {
   return text.trim().split(/\s+/).filter(Boolean).length;
 }
@@ -164,7 +184,7 @@ function applyMode(mode) {
   setText('target-label', config.targetLabel);
   setText('part-label', currentMode === 'PTE' ? 'Writing Task' : 'Writing Part');
   setText('score-eyebrow', config.scoreLabel);
-  questionInput.placeholder = config.questionPlaceholder;
+  questionDisplay.dataset.placeholder = config.questionPlaceholder;
   if (reportChatInput) reportChatInput.placeholder = config.chatPlaceholder;
   populateOptions(bandSelect, config.targetValues, config.targetPlaceholder, bandSelect.value || config.defaultTarget, config.defaultTarget);
   populateTaskOptions(previousPart);
@@ -197,19 +217,33 @@ function initTheme() {
 }
 
 function setFormDisabled(disabled) {
-  [bandSelect, partSelect, questionInput, imageInput, answerInput, submitBtn, generateQuestionBtn, ...modeRadios].forEach((field) => {
+  [bandSelect, partSelect, imageInput, answerInput, submitBtn, generateQuestionBtn, ...modeRadios].forEach((field) => {
     field.disabled = disabled;
   });
+  questionDisplay.contentEditable = disabled ? 'false' : 'true';
   submitBtn.textContent = disabled ? 'Evaluating...' : 'Evaluate deeply';
+}
+
+function setLoaderTip(index) {
+  const tipEl = qs('loader-tip');
+  tipEl.classList.add('tip-out');
+  setTimeout(() => {
+    tipEl.textContent = loaderTips[index];
+    tipEl.classList.remove('tip-out');
+  }, 240);
+  document.querySelectorAll('.loader-agent').forEach((agent, i) => {
+    agent.classList.toggle('agent-active', i === index);
+    agent.classList.toggle('agent-done', i < index);
+  });
 }
 
 function startLoader() {
   clearInterval(loaderTipInterval);
   currentTipIndex = 0;
-  qs('loader-tip').textContent = loaderTips[0];
+  setLoaderTip(0);
   loaderTipInterval = setInterval(() => {
     currentTipIndex = (currentTipIndex + 1) % loaderTips.length;
-    qs('loader-tip').textContent = loaderTips[currentTipIndex];
+    setLoaderTip(currentTipIndex);
   }, 2200);
 }
 
@@ -380,7 +414,10 @@ function renderTables(data) {
 }
 
 function renderModelAndPractice(data) {
-  qs('correction-output').innerHTML = renderSafeMarkdown(data.correction || '');
+  qs('correction-output').innerHTML = renderCorrectedDraft(data.correction || '');
+  const correctionNotes = qs('correction-notes-output');
+  clear(correctionNotes);
+  (data.correctionNotes || []).forEach((note) => correctionNotes.appendChild(createEl('li', '', note)));
   qs('model-answer-output').innerHTML = renderSafeMarkdown(data.modelAnswer || '');
 
   const notes = qs('model-notes-output');
@@ -487,7 +524,6 @@ modeRadios.forEach((radio) => {
 
 function formatGeneratedQuestion(data) {
   const parts = [];
-  if (data.instructions) parts.push(data.instructions);
   if (data.sourceText) parts.push(`Source Text:\n${data.sourceText}`);
   if (data.question) parts.push(data.question);
   if (data.recommendedWords || data.timeMinutes) {
@@ -511,7 +547,7 @@ async function generateQuestion() {
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Question generation failed');
-    questionInput.value = formatGeneratedQuestion(data);
+    setQuestionText(formatGeneratedQuestion(data));
   } catch (error) {
     window.alert(error.message || 'Could not generate a question. Please try again.');
   } finally {
@@ -554,7 +590,7 @@ form.addEventListener('submit', async (event) => {
         targetScore: bandSelect.value,
         band: bandSelect.value,
         part,
-        question: questionInput.value,
+        question: questionDisplay.textContent || questionInput.value,
         answer: answerInput.value,
         image: imageBase64,
       }),
@@ -586,6 +622,87 @@ hideNoteBtn.addEventListener('click', () => {
 });
 exportPdfBtn.addEventListener('click', exportToPDF);
 generateQuestionBtn.addEventListener('click', generateQuestion);
+
+// Answer expand modal
+const expandAnswerBtn = document.getElementById('expand-answer-btn');
+const collapseAnswerBtn = document.getElementById('collapse-answer-btn');
+const answerModalOverlay = document.getElementById('answer-modal-overlay');
+const answerModalInput = document.getElementById('answer-modal-input');
+const answerModalWordCount = document.getElementById('answer-modal-word-count');
+
+function updateModalWordCount() {
+  const task = getTaskConfig();
+  const count = getWordCount(answerModalInput.value);
+  const tooShort = count < task.minWords;
+  const tooLong = task.maxWords && count > task.maxWords;
+  answerModalWordCount.textContent = `${count} words · ${task.guidance}`;
+  answerModalWordCount.className = tooShort || tooLong ? 'word-count warn answer-modal-word-count' : 'word-count ok answer-modal-word-count';
+}
+
+function closeAnswerModal() {
+  answerModalOverlay.classList.add('hidden');
+}
+
+expandAnswerBtn.addEventListener('click', () => {
+  answerModalInput.value = answerInput.value;
+  updateModalWordCount();
+  answerModalOverlay.classList.remove('hidden');
+  answerModalInput.focus();
+});
+
+collapseAnswerBtn.addEventListener('click', closeAnswerModal);
+
+answerModalOverlay.addEventListener('click', (e) => {
+  if (e.target === answerModalOverlay) closeAnswerModal();
+});
+
+answerModalInput.addEventListener('input', () => {
+  answerInput.value = answerModalInput.value;
+  updateWordCount();
+  updateModalWordCount();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !answerModalOverlay.classList.contains('hidden')) {
+    closeAnswerModal();
+  }
+});
+
+// --- Question display helpers ---
+
+function setQuestionText(text) {
+  questionDisplay.textContent = text;
+  questionInput.value = text;
+  if (window.AnnotationSystem) {
+    window.AnnotationSystem.loadAnnotations(questionDisplay);
+  }
+}
+
+questionDisplay.addEventListener('input', () => {
+  questionInput.value = questionDisplay.textContent;
+  if (window.AnnotationSystem) window.AnnotationSystem.saveAnnotations(questionDisplay);
+});
+
+// --- Annotation toolbar wiring ---
+document.getElementById('btn-highlight').addEventListener('click', () => {
+  if (window.AnnotationSystem) window.AnnotationSystem.applyHighlight(questionDisplay);
+});
+
+document.getElementById('btn-underline').addEventListener('click', () => {
+  if (window.AnnotationSystem) window.AnnotationSystem.applyUnderline(questionDisplay);
+});
+
+// Init annotation system after DOM is ready
+if (window.AnnotationSystem) {
+  window.AnnotationSystem.init(
+    questionDisplay,
+    document.getElementById('note-popup'),
+    document.getElementById('note-popup-text'),
+    document.getElementById('note-popup-save'),
+    document.getElementById('note-popup-cancel'),
+    document.getElementById('note-popup-delete'),
+  );
+}
 
 initTheme();
 initMode();
