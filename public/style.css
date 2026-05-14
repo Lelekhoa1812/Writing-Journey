@@ -1564,6 +1564,7 @@ span.hl-note {
   inset: 0;
   background: radial-gradient(ellipse at center, #0d1f38 0%, #04080f 100%);
   animation: timeout-backdrop-in 0.4s ease forwards;
+  pointer-events: none;
 }
 
 @keyframes timeout-backdrop-in {
@@ -1579,6 +1580,7 @@ span.hl-note {
   border: 1.5px solid rgba(84, 183, 232, 0.18);
   transform: translate(-50%, -50%) scale(0);
   animation: bg-ring-expand 2.8s ease-out infinite;
+  pointer-events: none;
 }
 
 .timer-timeout-bg-ring:nth-child(2) { animation-delay: 0.9s; }

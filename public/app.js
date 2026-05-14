@@ -115,22 +115,18 @@ function renderSafeMarkdown(md = '') {
 }
 
 function renderCorrectedDraft(text = '') {
-  const tagPattern = /<->([\s\S]*?)<\/->|<\+>([\s\S]*?)<\/\+>/g;
-  let lastIndex = 0;
-  let match;
-  let html = '';
-  const escapePlain = (s) => escapeHTML(s).replace(/\n/g, '<br>');
-  while ((match = tagPattern.exec(text)) !== null) {
-    html += escapePlain(text.slice(lastIndex, match.index));
-    if (match[1] !== undefined) {
-      html += `<span class="correction-del">${escapeHTML(match[1])}</span>`;
-    } else {
-      html += `<span class="correction-ins">${escapeHTML(match[2])}</span>`;
-    }
-    lastIndex = match.index + match[0].length;
-  }
-  html += escapePlain(text.slice(lastIndex));
-  return html;
+  // Replace custom tags with control chars BEFORE escaping so HTML chars inside
+  // tags are still escaped and the browser never sees raw <-> or </-> as markup.
+  const safe = text
+    .replace(/<->/g, '\x01')
+    .replace(/<\/->/g, '\x02')
+    .replace(/<\+>/g, '\x03')
+    .replace(/<\/\+>/g, '\x04');
+  const escaped = escapeHTML(safe).replace(/\n/g, '<br>');
+  return escaped
+    .replace(/\x01([\s\S]*?)\x02/g, '<span class="correction-del">$1</span>')
+    .replace(/\x03([\s\S]*?)\x04/g, '<span class="correction-ins">$1</span>')
+    .replace(/[\x01-\x04]/g, '');
 }
 
 function getWordCount(text) {

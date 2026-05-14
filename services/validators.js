@@ -72,6 +72,7 @@ function normalizeCorrection(value) {
   const data = requireObject(value, 'correction');
   return {
     correction: coerceString(data.correction, ''),
+    correctionNotes: coerceArray(data.correctionNotes).map(String),
     sentenceInsights: coerceArray(data.sentenceInsights).map((item, index) => ({
       sentenceNumber: Number(item.sentenceNumber) || index + 1,
       original: coerceString(item.original, ''),

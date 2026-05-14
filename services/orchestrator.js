@@ -230,6 +230,7 @@ async function evaluateWriting(payload, options = {}) {
     score,
     ...flatCriteria,
     correction: buildLegacyCorrection(correctionResult.data),
+    correctionNotes: correctionResult.data.correctionNotes || [],
     modelAnswer: modelAnswerResult.data.modelAnswer,
     overview: synthesisResult.data.overview,
     criteria: examinerResult.data.criteria,
