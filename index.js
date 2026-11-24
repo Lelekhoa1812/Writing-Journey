@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 
@@ -20,7 +21,11 @@ app.get('/health', (req, res) => {
 
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
+const clientDist = path.join(__dirname, 'client', 'dist');
+const staticRoot = fs.existsSync(path.join(clientDist, 'index.html'))
+  ? clientDist
+  : path.join(__dirname, 'public');
+app.use(express.static(staticRoot));
 
 app.post('/evaluate', async (req, res) => {
   try {

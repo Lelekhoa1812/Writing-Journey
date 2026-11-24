@@ -1,0 +1,84 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Segoe UI", system-ui, sans-serif;
+  --font-essay: Georgia, "Iowan Old Style", Palatino, serif;
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-desk: var(--desk);
+  --color-sheet: var(--sheet);
+  --color-rail: var(--rail);
+  --color-pen: var(--pen);
+  --color-pen-ink: var(--pen-ink);
+  --color-line: var(--line);
+  --color-warn: var(--warn);
+  --color-good: var(--good);
+}
+
+:root {
+  --ink: #172033;
+  --muted: #3e5168;
+  --desk: #d9e3ee;
+  --sheet: #ffffff;
+  --rail: #17315f;
+  --pen: #1746d1;
+  --pen-ink: #ffffff;
+  --line: #c5d0de;
+  --warn: #9a3412;
+  --good: #166534;
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  --ink: #e7eef6;
+  --muted: #b7c6d6;
+  --desk: #0e141c;
+  --sheet: #171e28;
+  --rail: #10243f;
+  --pen: #8eb0ff;
+  --pen-ink: #10203a;
+  --line: #2c3b4e;
+  --warn: #fdba74;
+  --good: #86efac;
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--desk);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  caret-color: var(--pen);
+}
+
+::selection {
+  background: color-mix(in srgb, var(--pen) 28%, white);
+  color: #172033;
+}
+
+:focus-visible {
+  outline: 2px solid var(--pen);
+  outline-offset: 2px;
+}
+
+* {
+  scrollbar-color: var(--line) transparent;
+}
+
+.essay-sheet {
+  font-family: var(--font-essay);
+  background-image: linear-gradient(to bottom, transparent 31px, var(--line) 32px);
+  background-size: 100% 32px;
+  line-height: 32px;
+}
+
+#question-display:empty::before {
+  content: attr(data-placeholder);
+  color: var(--muted);
+}

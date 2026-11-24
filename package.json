@@ -4,6 +4,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
+    "build": "npm --prefix client install && npm --prefix client run build",
     "test": "node --test"
   },
   "dependencies": {
