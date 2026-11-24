@@ -1,6 +1,6 @@
 const { coerceArray, coerceString } = require('./jsonUtils');
-const { getExamConfig } = require('./examConfig');
-const { CRITERIA, roundForScale, roundToHalf, safeScore } = require('./score');
+const { getExamConfig, getTraits } = require('./examConfig');
+const { CRITERIA, roundToHalf } = require('./score');
 
 function requireObject(value, label) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -27,26 +27,42 @@ function normalizeAnalysis(value) {
   };
 }
 
+function clampTrait(raw, max) {
+  const number = Math.round(Number(raw));
+  if (!Number.isFinite(number)) return 0;
+  return Math.max(0, Math.min(max, number));
+}
+
 function normalizeExaminer(value, mode = 'IELTS', facts = {}) {
   const data = requireObject(value, 'examiner');
   const config = getExamConfig(mode);
+  const traits = facts.traits || getTraits(mode, facts.part || '2');
   const criteria = {};
-  config.criteria.forEach((key) => {
-    const item = data.criteria?.[key] || data[key] || {};
-    const raw = item.score ?? data[key];
-    const score = config.mode === 'IELTS'
-      ? roundToHalf(raw)
-      : roundForScale(safeScore(raw, config.scoreScale, config.scoreScale.min), config.scoreScale);
-    criteria[key] = {
-      score,
-      reason: coerceString(item.reason ?? data[`${key}_reason`], 'No reason supplied.'),
+  traits.forEach((trait) => {
+    const item = data.criteria?.[trait.key] || data[trait.key] || {};
+    const raw = item.score ?? data[trait.key];
+    criteria[trait.key] = {
+      score: config.mode === 'IELTS' ? roundToHalf(raw) : clampTrait(raw, trait.max),
+      max: trait.max,
+      label: trait.label,
+      reason: coerceString(item.reason ?? data[`${trait.key}_reason`], 'No reason supplied.'),
       evidence: coerceArray(item.evidence).map(String).slice(0, 4),
       nextStep: coerceString(item.nextStep, 'Focus on making this criterion more precise.'),
     };
   });
-  if (facts.formFailed && criteria.Form) {
-    criteria.Form.score = config.scoreScale.min;
-    criteria.Form.reason = facts.formReason || criteria.Form.reason;
+  if (config.mode === 'PTE' && facts.hardZero) {
+    traits.forEach((trait) => {
+      criteria[trait.key].score = 0;
+      if (trait.key === 'Form') criteria[trait.key].reason = facts.formReason || criteria[trait.key].reason;
+    });
+  } else if (config.mode === 'PTE' && facts.formCap != null && criteria.Form) {
+    criteria.Form.score = Math.min(criteria.Form.score, facts.formCap);
+    if (facts.formReason) criteria.Form.reason = facts.formReason;
+  }
+  if (config.mode === 'PTE' && (criteria.Content?.score === 0 || criteria.Form?.score === 0)) {
+    traits.forEach((trait) => {
+      if (trait.key !== 'Content' && trait.key !== 'Form') criteria[trait.key].score = 0;
+    });
   }
   return { criteria };
 }

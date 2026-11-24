@@ -9,8 +9,8 @@ const {
   normalizeModelAnswer,
   normalizeSynthesis,
 } = require('./validators');
-const { getExamConfig, getTaskConfig, normalizeMode } = require('./examConfig');
-const { calculateModeScore, getWordCount, measureDraft, safeBand, safeScore } = require('./score');
+const { getExamConfig, getTaskConfig, getTraits, normalizeMode, traitMax } = require('./examConfig');
+const { calculateItemScore, calculateModeScore, getWordCount, measureDraft, safeBand } = require('./score');
 const { runJsonAgent, runTextAgent } = require('./azureClient');
 const { getNimPool, runToolLoop } = require('./nimClient');
 const { CHAT_TOOLS, compactEvaluation, compactHistory, executeChatTool } = require('./session');
@@ -55,10 +55,12 @@ function fallbackAnalysis(input) {
 }
 
 function fallbackExaminer(input = {}) {
-  const config = getExamConfig(input.mode);
+  const traits = getTraits(input.mode, input.part);
   return {
-    criteria: Object.fromEntries(config.criteria.map((key) => [key, {
-      score: config.mode === 'IELTS' ? 0 : config.scoreScale.min,
+    criteria: Object.fromEntries(traits.map((trait) => [trait.key, {
+      score: 0,
+      max: trait.max,
+      label: trait.label,
       reason: 'Scoring agent could not return validated JSON after retries.',
       evidence: [],
       nextStep: 'Try evaluation again, or review the diagnostic sections that did complete.',
@@ -116,14 +118,13 @@ function fallbackSynthesis() {
   };
 }
 
-function flattenCriteria(examiner, mode = 'IELTS') {
-  const config = getExamConfig(mode);
+function flattenCriteria(examiner, mode = 'IELTS', part = '2') {
+  const traits = getTraits(mode, part);
   const output = {};
-  config.criteria.forEach((key) => {
-    output[key] = config.mode === 'IELTS'
-      ? safeBand(examiner.criteria[key]?.score)
-      : safeScore(examiner.criteria[key]?.score, config.scoreScale, config.scoreScale.min);
-    output[`${key}_reason`] = examiner.criteria[key]?.reason || '';
+  traits.forEach((trait) => {
+    const score = examiner.criteria[trait.key]?.score;
+    output[trait.key] = normalizeMode(mode) === 'IELTS' ? safeBand(score) : Number(score) || 0;
+    output[`${trait.key}_reason`] = examiner.criteria[trait.key]?.reason || '';
   });
   return output;
 }
@@ -218,7 +219,7 @@ async function evaluateWriting(payload, options = {}) {
   };
 
   const [examinerResult, diagnosisResult, correctionResult, modelAnswerResult] = await Promise.all([
-    runAgent(prompts.examiner(withAnalysis), config.model, (value) => normalizeExaminer(value, input.mode, measured), () => fallbackExaminer(input), [], scoreLimits),
+    runAgent(prompts.examiner(withAnalysis), config.model, (value) => normalizeExaminer(value, input.mode, { ...measured, part: input.part }), () => fallbackExaminer(input), [], scoreLimits),
     runAgent(prompts.diagnosis(withAnalysis), config.model, normalizeDiagnosis, fallbackDiagnosis, [], scoreLimits),
     runAgent(prompts.correction(withAnalysis), config.model, normalizeCorrection, fallbackCorrection, [], proseLimits),
     runAgent(prompts.modelAnswer(withAnalysis), config.model, normalizeModelAnswer, fallbackModelAnswer, [], proseLimits),
@@ -242,16 +243,25 @@ async function evaluateWriting(payload, options = {}) {
   ]);
   traces.push(learningResult.trace, synthesisResult.trace);
 
-  const flatCriteria = flattenCriteria(examinerResult.data, input.mode);
-  const score = calculateModeScore(flatCriteria, input.mode);
+  const traits = getTraits(input.mode, input.part);
+  const flatCriteria = flattenCriteria(examinerResult.data, input.mode, input.part);
   const examConfig = getExamConfig(input.mode);
   const taskConfig = getTaskConfig(input.mode, input.part);
+  const score = input.mode === 'PTE'
+    ? calculateItemScore(flatCriteria, traits)
+    : calculateModeScore(flatCriteria, input.mode);
+  const scoreScale = input.mode === 'PTE'
+    ? { min: 0, max: taskConfig.itemMax || traitMax(traits), precision: 0 }
+    : examConfig.scoreScale;
 
   return {
     mode: input.mode,
-    scoreNotice: 'Practice estimate. This is not an official test score.',
+    scoreNotice: input.mode === 'PTE'
+      ? 'These are raw item points. Pearson does not turn one writing item into the 10 to 90 Writing score.'
+      : 'Practice band. This is not an official IELTS result.',
     targetScore: input.targetScore,
-    scoreScale: examConfig.scoreScale,
+    traits,
+    scoreScale,
     taskLabel: taskConfig.label,
     score,
     ...flatCriteria,

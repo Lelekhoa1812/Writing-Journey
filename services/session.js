@@ -1,4 +1,4 @@
-const { getExamConfig, getTaskConfig } = require('./examConfig');
+const { getExamConfig, getTaskConfig, getTraits, traitMax } = require('./examConfig');
 const { getWordCount } = require('./score');
 
 function compactEvaluation(context) {
@@ -81,8 +81,10 @@ function executeChatTool(name, args, context) {
       words: task.recommendedWords,
       minutes: task.timeMinutes,
       oneSentence: Boolean(task.oneSentence),
-      scoreScale: config.scoreScale,
-      criteria: config.criteria,
+      scoreScale: config.mode === 'PTE'
+        ? { min: 0, max: task.itemMax || traitMax(getTraits(args.mode, args.part)), precision: 0 }
+        : config.scoreScale,
+      criteria: getTraits(args.mode, args.part).map((trait) => `${trait.key} 0-${trait.max}`),
     };
   }
   if (name === 'get_score_snapshot') {

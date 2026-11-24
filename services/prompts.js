@@ -1,4 +1,4 @@
-const { MODE_PTE, getExamConfig, getTaskConfig } = require('./examConfig');
+const { MODE_PTE, getExamConfig, getTaskConfig, getTraits } = require('./examConfig');
 const { rubricCard } = require('./rubric');
 
 function commonContext(input) {
@@ -28,7 +28,7 @@ function modeCopy(input) {
   if (config.mode === MODE_PTE) {
     return {
       analyst: 'You are a PTE Academic Writing task analyst. Extract the task type, passage/prompt constraints, response form, and scoring-relevant requirements.',
-      examiner: 'You are a strict but helpful PTE Academic Writing evaluator. Score evidence against PTE task expectations, including content, form, grammar, vocabulary, coherence, and task-specific word/sentence constraints.',
+      examiner: 'You are a strict but helpful PTE Academic Writing evaluator. Score each published trait as an integer on its own raw scale. Do not convert traits into a 10 to 90 score.',
       diagnosis: 'You are a PTE Writing diagnostician. Explain root causes behind errors, weak content selection, form violations, and unclear language.',
       correction: 'You are a PTE correction coach. Preserve the student intent while making teachable corrections for concise, accurate PTE writing.',
       modelAnswer: 'You write natural PTE model responses aligned to the target score and selected task. For Summarize Written Text, produce one sentence of 5-75 words.',
@@ -61,15 +61,17 @@ function inputAnalyzer(input) {
 function examiner(input) {
   const copy = modeCopy(input);
   const config = getExamConfig(input.mode);
-  const criteriaShape = Object.fromEntries(config.criteria.map((key) => [key, {
+  const traits = getTraits(input.mode, input.part);
+  const criteriaShape = Object.fromEntries(traits.map((trait) => [trait.key, {
     score: 0,
     reason: '',
     evidence: [''],
     nextStep: '',
   }]));
+  const scaleLine = traits.map((trait) => `${trait.key} is an integer from 0 to ${trait.max}.`).join(' ');
   return {
     name: `${config.label} Examiner Agent`,
-    system: `${copy.examiner} These scores are a practice estimate, not an official result. Quote the student before you score. The measured word count is final. ${rubricCard(input)} Return criterion scores on the ${config.scoreScale.min}-${config.scoreScale.max} scale. ${jsonRule}`,
+    system: `${copy.examiner} Quote the student before you score. The measured word count is final. ${rubricCard(input)} ${scaleLine} ${jsonRule}`,
     user: `${commonContext(input)}\n\nReturn JSON: ${JSON.stringify({ criteria: criteriaShape })}`,
   };
 }

@@ -133,7 +133,7 @@ test('evaluateWriting assembles a multi-agent report with mocked model responses
 test('evaluateWriting supports PTE scoring and task context', async () => {
   const responses = [
     '{"taskType":"PTE Write Essay","promptRequirements":["answer the essay prompt"],"userThesis":"Agree","paragraphMap":[{"paragraph":1,"purpose":"intro","strength":"position","concern":"needs depth"}],"constraints":["200-300 words"],"wordCount":205}',
-    '{"criteria":{"Content":{"score":65,"reason":"Relevant but not fully developed","evidence":["general example"],"nextStep":"add specifics"},"Form":{"score":80,"reason":"Within range","evidence":["205 words"],"nextStep":"keep structure"},"Grammar":{"score":62,"reason":"Some errors","evidence":["article errors"],"nextStep":"proofread"},"Vocabulary":{"score":68,"reason":"Adequate range","evidence":["some repetition"],"nextStep":"vary phrasing"},"Coherence":{"score":70,"reason":"Clear flow","evidence":["logical paragraphs"],"nextStep":"improve transitions"}}}',
+    '{"criteria":{"Content":{"score":4,"reason":"Relevant but not fully developed","evidence":["general example"],"nextStep":"add specifics"},"Form":{"score":2,"reason":"Within range","evidence":["240 words"],"nextStep":"keep structure"},"Development":{"score":4,"reason":"Clear paragraphs","evidence":["logical order"],"nextStep":"link ideas"},"Grammar":{"score":1,"reason":"Some errors","evidence":["article errors"],"nextStep":"proofread"},"LinguisticRange":{"score":4,"reason":"Adequate range","evidence":["some repetition"],"nextStep":"vary phrasing"},"Vocabulary":{"score":1,"reason":"Adequate words","evidence":["some repetition"],"nextStep":"vary wording"},"Spelling":{"score":2,"reason":"Spelling is consistent","evidence":["no misspelling"],"nextStep":"keep one convention"}}}',
     '{"diagnostics":[{"criterion":"Content","issue":"General support","rootCause":"No concrete evidence","whyItMatters":"Limits PTE content score","fixStrategy":"Add example"}],"ideaInsights":[],"cohesionMap":[]}',
     '{"correction":"A corrected PTE draft.","sentenceInsights":[],"vocabularyUpgrades":[],"grammarPatterns":[]}',
     '{"modelAnswer":"A target-score PTE essay.","modelAnswerNotes":["within range"]}',
@@ -154,9 +154,10 @@ test('evaluateWriting supports PTE scoring and task context', async () => {
   assert.equal(report.mode, 'PTE');
   assert.equal(report.targetScore, '65');
   assert.equal(report.taskLabel, 'Write Essay');
-  assert.equal(report.score, 69);
-  assert.equal(report.scoreScale.max, 90);
-  assert.equal(report.Content, 65);
+  assert.equal(report.score, 18);
+  assert.equal(report.scoreScale.max, 26);
+  assert.equal(report.Content, 4);
+  assert.equal(report.Development, 4);
 });
 
 test('generateQuestion returns validated SLM question output', async () => {
@@ -223,8 +224,9 @@ test('a PTE summary with two sentences fails the form gate', async () => {
       slm: 'slm',
     },
   );
-  assert.equal(report.Form, 10);
-  assert.match(report.criteria.Form.reason, /practice gate/);
+  assert.equal(report.Form, 0);
+  assert.equal(report.score, 0);
+  assert.match(report.criteria.Form.reason, /Form is 0/);
 });
 
 test('generateQuestion falls back after malformed SLM output', async () => {

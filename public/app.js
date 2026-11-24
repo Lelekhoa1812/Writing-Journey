@@ -45,12 +45,12 @@ const examModes = {
   PTE: {
     label: 'PTE',
     eyebrow: 'PTE writing coach',
-    targetLabel: 'Target Score',
+    targetLabel: 'Score-report goal',
     targetPlaceholder: 'Select Score',
     targetValues: ['10', '20', '30', '36', '42', '50', '58', '65', '73', '79', '84', '90'],
     defaultTarget: '65',
-    scoreLabel: 'Practice score',
-    scoreMax: 90,
+    scoreLabel: 'Item points',
+    scoreMax: 26,
     scorePrecision: 0,
     chatPlaceholder: 'Ask about this report or PTE writing...',
     questionPlaceholder: 'Paste or type your PTE writing prompt here...',
@@ -265,12 +265,14 @@ function renderCriterionBars(data) {
   const precision = data.scoreScale?.precision ?? getModeConfig().scorePrecision;
   criteria.forEach((key) => {
     const value = Number(data[key] || data.criteria?.[key]?.score || 0);
+    const barMax = Number(data.criteria?.[key]?.max || scaleMax);
     const item = createEl('div', 'criterion-bar');
     const label = createEl('div', 'criterion-bar-label');
-    label.append(createEl('span', '', key), createEl('strong', '', value ? value.toFixed(precision) : '-'));
+    const shown = data.mode === 'PTE' ? `${value}/${barMax}` : (value ? value.toFixed(precision) : '-');
+    label.append(createEl('span', '', key), createEl('strong', '', shown));
     const track = createEl('div', 'bar-track');
     const fill = createEl('div', 'bar-fill');
-    fill.style.width = `${Math.max(0, Math.min(100, (value / scaleMax) * 100))}%`;
+    fill.style.width = `${Math.max(0, Math.min(100, (value / barMax) * 100))}%`;
     track.appendChild(fill);
     item.append(label, track);
     container.appendChild(item);
@@ -305,8 +307,10 @@ function renderCriteria(data) {
     Content: 'Content',
     Form: 'Form',
     Grammar: 'Grammar',
-    Vocabulary: 'Vocabulary',
-    Coherence: 'Coherence',
+    Vocabulary: 'Vocabulary range',
+    Development: 'Development, structure and coherence',
+    LinguisticRange: 'General linguistic range',
+    Spelling: 'Spelling',
   };
   Object.keys(data.criteria || {}).forEach((key) => {
     const precision = data.scoreScale?.precision ?? getModeConfig().scorePrecision;
@@ -449,7 +453,11 @@ function renderReport(data) {
   latestEvaluationContext = data;
   window.latestEvaluationContext = data;
   const precision = data.scoreScale?.precision ?? getModeConfig().scorePrecision;
-  qs('score-label').textContent = Number(data.score || 0).toFixed(precision);
+  qs('score-label').textContent = data.mode === 'PTE'
+    ? `${data.score}/${data.scoreScale?.max || getModeConfig().scoreMax}`
+    : Number(data.score || 0).toFixed(precision);
+  const notice = qs('score-notice');
+  if (notice) notice.textContent = data.scoreNotice || 'Practice estimate. This is not an official test score.';
   renderCriterionBars(data);
   renderOverview(data);
   renderCriteria(data);

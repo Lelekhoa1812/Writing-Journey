@@ -24,28 +24,22 @@ function rubricCard(input = {}) {
   const task = getTaskConfig(mode, input.part);
   const target = input.targetScore || input.band || config.defaultTarget;
   if (mode === 'PTE' && task.oneSentence) {
-    const [low, mid, high] = nearestPte(target);
     return [
-      'Practice rubric for PTE Summarize Written Text. This is not a Pearson score.',
-      'Form: one sentence, 5 to 75 words. A second sentence or a word count outside that range fails Form.',
-      'Content: the sentence states the main idea and one necessary supporting point from the passage.',
-      'Grammar, vocabulary, and coherence describe control inside that one sentence.',
-      `Anchors for target ${target}:`,
-      rungLine(low, 'The sentence misses the main idea or adds a claim that is not in the passage.'),
-      rungLine(mid, 'The sentence gives the main idea and one relevant support, with clear grammar.'),
-      rungLine(high, 'The sentence is precise, concise, and uses the passage relationship accurately.'),
+      'Score PTE Summarize Written Text in raw trait points. Do not invent a 10 to 90 score.',
+      `The student's score-report goal is ${target}. That goal is not this item's total.`,
+      'Content 0 to 4. Form 0 or 1. Grammar 0 to 2. Vocabulary 0 to 2. The item total is 9.',
+      'Form is 0 when the response is not one sentence, is outside 5 to 75 words, or is written in capitals.',
+      'If Content or Form is 0, the item total is 0.',
+      'A strong sentence gives the main idea and one necessary support from the passage.',
     ].join('\n');
   }
   if (mode === 'PTE') {
-    const [low, mid, high] = nearestPte(target);
     return [
-      'Practice rubric for PTE Write Essay. This is not a Pearson score.',
-      'Form: 200 to 300 words. Content: a direct position with relevant support.',
-      'Grammar, vocabulary, and coherence describe control, range, and paragraph order.',
-      `Anchors for target ${target}:`,
-      rungLine(low, 'The position is unclear or the support does not answer the prompt.'),
-      rungLine(mid, 'The position is clear and each body paragraph gives one relevant reason.'),
-      rungLine(high, 'The position, reasons, and examples stay specific and controlled throughout.'),
+      'Score PTE Write Essay in raw trait points. Do not invent a 10 to 90 score.',
+      `The student's score-report goal is ${target}. That goal is not this item's total.`,
+      'Content 0 to 6. Form 0 to 2. Development 0 to 6. Grammar 0 to 2. Linguistic range 0 to 6. Vocabulary 0 to 2. Spelling 0 to 2. The item total is 26.',
+      'Full Form credit is 200 to 300 words. 120 to 199 or 301 to 380 caps Form at 1. Under 120 or over 380 scores 0 on every trait.',
+      'All capitals or no punctuation also scores 0. If Content or Form is 0, the item total is 0.',
     ].join('\n');
   }
   const [low, mid, high] = nearestBands(target);
