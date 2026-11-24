@@ -50,6 +50,12 @@ function normalizeExaminer(value, mode = 'IELTS', facts = {}) {
       nextStep: coerceString(item.nextStep, 'Focus on making this criterion more precise.'),
     };
   });
+  if (config.mode === 'IELTS' && criteria.TR && facts.wordCount && !facts.belowMinimum) {
+    const reason = criteria.TR.reason || '';
+    if (/under the required|below the .{0,40}minimum|short of the|fewer than \d+ words|under the \d+-word/i.test(reason)) {
+      criteria.TR.reason = `The draft has ${facts.wordCount} words, so length meets the minimum and is not a penalty. ${reason}`;
+    }
+  }
   if (config.mode === 'PTE' && facts.hardZero) {
     traits.forEach((trait) => {
       criteria[trait.key].score = 0;

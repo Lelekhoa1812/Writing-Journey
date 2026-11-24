@@ -138,6 +138,27 @@ test('evaluateWriting assembles a multi-agent report with mocked model responses
   assert.equal(report.agentTraceSummary.length, 7);
 });
 
+test('evaluateWriting removes a false IELTS length penalty before the summary', async () => {
+  const responses = [
+    '{"taskType":"Part 2","promptRequirements":["discuss both"],"userThesis":"Balance","paragraphMap":[],"constraints":[],"wordCount":0}',
+    '{"criteria":{"TR":{"score":6,"reason":"The essay is under the required 250-word minimum (249 words). Ideas still need a clearer example.","evidence":["one example"],"nextStep":"extend the opinion"},"CC":{"score":7,"reason":"Clear order.","evidence":["paragraphs"],"nextStep":"keep the order"},"LR":{"score":7,"reason":"Precise words.","evidence":["range"],"nextStep":"keep the range"},"GR":{"score":7,"reason":"Controlled sentences.","evidence":["clauses"],"nextStep":"keep the control"}}}',
+    '{"diagnostics":[],"ideaInsights":[],"cohesionMap":[]}',
+    '{"correction":"A corrected draft.","sentenceInsights":[],"vocabularyUpgrades":[],"grammarPatterns":[]}',
+    '{"modelAnswer":"A model answer.","modelAnswerNotes":[]}',
+    '{"practicePlan":[{"priority":1,"focus":"Examples","drill":"add one example","successSignal":"the example is specific"}]}',
+    '{"overview":"Length was corrected before this summary.","targetBandGap":[],"topPriorities":[],"encouragement":"Continue."}',
+  ];
+  let index = 0;
+  const report = await evaluateWriting(
+    { mode: 'IELTS', part: '2', band: '7.0', question: 'Discuss both views.', answer: `${'example '.repeat(260)}` },
+    { client: {}, callModel: async () => responses[index++], model: 'main', slm: 'small' },
+  );
+  assert.ok(report.wordCount >= 250);
+  assert.match(report.criteria.TR.reason, /not a penalty/);
+  assert.match(report.criteria.TR.reason, /clearer example/);
+  assert.doesNotMatch(report.criteria.TR.reason, /249 words/);
+});
+
 test('evaluateWriting supports PTE scoring and task context', async () => {
   const responses = [
     '{"taskType":"PTE Write Essay","promptRequirements":["answer the essay prompt"],"userThesis":"Agree","paragraphMap":[{"paragraph":1,"purpose":"intro","strength":"position","concern":"needs depth"}],"constraints":["200-300 words"],"wordCount":205}',
@@ -210,6 +231,20 @@ test('evaluateWriting sends a chart only to the analyzer', async () => {
   );
   assert.deepEqual(seen.map((item) => item.images), [1, 0, 0, 0, 0, 0, 0]);
   assert.deepEqual(seen.map((item) => item.model), ['slm', 'llm', 'llm', 'llm', 'llm', 'slm', 'slm']);
+});
+
+test('an IELTS draft that meets the minimum is not marked short', () => {
+  const result = normalizeExaminer({
+    criteria: {
+      TR: { score: 6, reason: 'The essay is under the required 250-word minimum (249 words).' },
+      CC: { score: 7, reason: 'Clear order.' },
+      LR: { score: 7, reason: 'Precise words.' },
+      GR: { score: 7, reason: 'Controlled sentences.' },
+    },
+  }, 'IELTS', { part: '2', wordCount: 278, belowMinimum: false });
+  assert.equal(result.criteria.TR.score, 6);
+  assert.match(result.criteria.TR.reason, /278 words/);
+  assert.match(result.criteria.TR.reason, /not a penalty/);
 });
 
 test('a PTE content zero removes the other trait points', () => {

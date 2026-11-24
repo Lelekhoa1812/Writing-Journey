@@ -128,6 +128,18 @@ function pteScoreNotice(mode, criteria) {
   return [gate, 'These are raw item points. Pearson does not turn one writing item into the 10 to 90 Writing score.'].filter(Boolean).join(' ');
 }
 
+function applyLengthVerdict(examiner, measured) {
+  const taskResponse = examiner?.criteria?.TR;
+  if (!taskResponse || measured.belowMinimum || !measured.wordCount) return;
+  const reason = String(taskResponse.reason || '');
+  if (!/under the required|below the .{0,40}minimum|short of the|fewer than \d+ words|under the \d+-word|word count/i.test(reason)) return;
+  const kept = reason
+    .split(/(?<=\.)\s+/)
+    .filter((sentence) => !/under the required|word minimum|word count|below the .{0,40}minimum|\b\d+ words\b/i.test(sentence))
+    .join(' ');
+  taskResponse.reason = `The draft has ${measured.wordCount} words, so length meets the minimum and is not a penalty. ${kept}`.trim();
+}
+
 function flattenCriteria(examiner, mode = 'IELTS', part = '2') {
   const traits = getTraits(mode, part);
   const output = {};
@@ -235,6 +247,7 @@ async function evaluateWriting(payload, options = {}) {
     runAgent(prompts.modelAnswer(withAnalysis), config.model, normalizeModelAnswer, fallbackModelAnswer, [], proseLimits),
   ]);
   traces.push(examinerResult.trace, diagnosisResult.trace, correctionResult.trace, modelAnswerResult.trace);
+  applyLengthVerdict(examinerResult.data, measured);
 
   const learningInput = {
     ...withAnalysis,
@@ -289,7 +302,8 @@ async function evaluateWriting(payload, options = {}) {
     targetBandGap: synthesisResult.data.targetBandGap,
     topPriorities: synthesisResult.data.topPriorities,
     encouragement: synthesisResult.data.encouragement,
-    analysis: analysisResult.data,
+    wordCount: measured.wordCount,
+    analysis,
     agentTraceSummary: traces,
   };
 }

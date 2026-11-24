@@ -11,14 +11,23 @@ function commonContext(input) {
     `Writing task: ${task.promptLabel}`,
     `Task guidance: ${task.recommendedWords}${task.oneSentence ? '; the response must be one sentence.' : ''}`,
     `Question: ${input.question || 'No typed question supplied.'}`,
-    `Measured words: ${input.wordCount ?? 'unknown'}`,
     `Measured sentences: ${input.sentenceCount ?? 'unknown'}`,
-    input.belowMinimum ? 'The draft is under the task minimum.' : '',
+    lengthVerdict(input, task),
     input.aboveMaximum ? 'The draft is over the task maximum.' : '',
     input.visualFacts?.length ? `Chart facts: ${input.visualFacts.join('; ')}` : '',
     input.analysis ? `Known analysis: ${JSON.stringify(input.analysis)}` : '',
     `User answer:\n${input.answer}`,
   ].filter(Boolean).join('\n\n');
+}
+
+function lengthVerdict(input, task) {
+  const words = input.wordCount;
+  const minimum = task.minWords || 0;
+  if (words == null) return 'Measured words: unknown. Do not invent a count.';
+  if (input.belowMinimum) {
+    return `Length verdict: ${words} words. This is under the minimum of ${minimum}. Use this count. Do not recount.`;
+  }
+  return `Length verdict: ${words} words. This meets the minimum of ${minimum}. Do not say the draft is short. Do not lower any score for length.`;
 }
 
 const jsonRule = 'Return only one valid JSON object. Do not include markdown fences, commentary, or keys outside the requested shape.';
@@ -71,7 +80,7 @@ function examiner(input) {
   const scaleLine = traits.map((trait) => `${trait.key} is an integer from 0 to ${trait.max}.`).join(' ');
   return {
     name: `${config.label} Examiner Agent`,
-    system: `${copy.examiner} Quote the student before you score. The measured word count is final. ${rubricCard(input)} ${scaleLine} ${jsonRule}`,
+    system: `${copy.examiner} Quote the student before you score. Obey the length verdict. Never invent a different word count. ${rubricCard(input)} ${scaleLine} ${jsonRule}`,
     user: `${commonContext(input)}\n\nReturn JSON: ${JSON.stringify({ criteria: criteriaShape })}`,
   };
 }
