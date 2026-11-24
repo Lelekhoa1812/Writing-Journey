@@ -118,6 +118,16 @@ function fallbackSynthesis() {
   };
 }
 
+function pteScoreNotice(mode, criteria) {
+  if (mode !== 'PTE') return 'Practice band. This is not an official IELTS result.';
+  const gate = Number(criteria.Content) === 0
+    ? 'Content is 0, so this item scores 0.'
+    : Number(criteria.Form) === 0
+      ? 'Form is 0, so this item scores 0.'
+      : '';
+  return [gate, 'These are raw item points. Pearson does not turn one writing item into the 10 to 90 Writing score.'].filter(Boolean).join(' ');
+}
+
 function flattenCriteria(examiner, mode = 'IELTS', part = '2') {
   const traits = getTraits(mode, part);
   const output = {};
@@ -256,9 +266,7 @@ async function evaluateWriting(payload, options = {}) {
 
   return {
     mode: input.mode,
-    scoreNotice: input.mode === 'PTE'
-      ? 'These are raw item points. Pearson does not turn one writing item into the 10 to 90 Writing score.'
-      : 'Practice band. This is not an official IELTS result.',
+    scoreNotice: pteScoreNotice(input.mode, flatCriteria),
     targetScore: input.targetScore,
     traits,
     scoreScale,

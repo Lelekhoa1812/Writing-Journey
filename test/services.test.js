@@ -212,6 +212,21 @@ test('evaluateWriting sends a chart only to the analyzer', async () => {
   assert.deepEqual(seen.map((item) => item.model), ['slm', 'llm', 'llm', 'llm', 'llm', 'slm', 'slm']);
 });
 
+test('a PTE content zero removes the other trait points', () => {
+  const result = normalizeExaminer({
+    criteria: {
+      Content: { score: 0, reason: 'Off topic.' },
+      Form: { score: 1, reason: 'One sentence.' },
+      Grammar: { score: 2, reason: 'No errors.' },
+      Vocabulary: { score: 2, reason: 'Precise words.' },
+    },
+  }, 'PTE', { part: '1' });
+  assert.equal(result.criteria.Grammar.score, 0);
+  assert.equal(result.criteria.Vocabulary.score, 0);
+  assert.match(result.criteria.Grammar.reason, /Content is 0, so this trait adds no points/);
+  assert.match(result.criteria.Grammar.reason, /No errors/);
+});
+
 test('a PTE summary with two sentences fails the form gate', async () => {
   const responses = [
     '{"taskType":"SWT","promptRequirements":["one sentence"],"userThesis":"Main idea","paragraphMap":[],"constraints":[],"wordCount":12,"visualFacts":[]}',

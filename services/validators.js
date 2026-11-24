@@ -60,8 +60,13 @@ function normalizeExaminer(value, mode = 'IELTS', facts = {}) {
     if (facts.formReason) criteria.Form.reason = facts.formReason;
   }
   if (config.mode === 'PTE' && (criteria.Content?.score === 0 || criteria.Form?.score === 0)) {
+    const gate = criteria.Content?.score === 0 ? 'Content is 0' : 'Form is 0';
     traits.forEach((trait) => {
-      if (trait.key !== 'Content' && trait.key !== 'Form') criteria[trait.key].score = 0;
+      if (trait.key === 'Content' || trait.key === 'Form') return;
+      criteria[trait.key].score = 0;
+      const prior = criteria[trait.key].reason;
+      const note = `${gate}, so this trait adds no points.`;
+      criteria[trait.key].reason = prior && prior !== 'No reason supplied.' ? `${note} ${prior}` : note;
     });
   }
   return { criteria };

@@ -52,7 +52,7 @@ export default function Report({ report, onExport, exporting }) {
         </div>
         <div id="criterion-bars" className="grid gap-3">
           {criteria.map((key) => {
-            const value = Number(report[key] || report.criteria?.[key]?.score || 0);
+            const value = Number(report[key] ?? report.criteria?.[key]?.score ?? 0);
             const barMax = Number(report.criteria?.[key]?.max || report.scoreScale?.max || mode.scoreMax);
             const shown = report.mode === 'PTE' ? `${value}/${barMax}` : value.toFixed(precision);
             return (

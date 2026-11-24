@@ -99,7 +99,7 @@ function modelAnswer(input) {
   return {
     name: 'Model Answer Agent',
     system: `${copy.modelAnswer} ${jsonRule}`,
-    user: `${commonContext(input)}\n\nReturn JSON: {"modelAnswer":"","modelAnswerNotes":[""]}`,
+    user: `${commonContext(input)}\n\nWrite a response to the question and any source text. Do not copy the student draft.\n\nReturn JSON: {"modelAnswer":"","modelAnswerNotes":[""]}`,
   };
 }
 
