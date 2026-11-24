@@ -6,6 +6,14 @@ const { calculateOverallScore, roundToHalf } = require('../services/score');
 const { normalizeEndpoint, runJsonAgent } = require('../services/azureClient');
 const { normalizeExaminer } = require('../services/validators');
 const { evaluateWriting, generateQuestion } = require('../services/orchestrator');
+const { chatAssistant } = require('../services/prompts');
+
+test('chat prompt quotes the published PTE form limits', () => {
+  const prompt = chatAssistant({ message: 'How long is a summary?', mode: 'PTE', part: '1' });
+  assert.match(prompt.system, /5 to 75 words/);
+  assert.match(prompt.system, /Do not invent a different word count/);
+  assert.match(prompt.system, /Active mode: PTE/);
+});
 
 test('extractJson handles fenced JSON and surrounding prose', () => {
   const parsed = extractJson('Here:\n```json\n{"TR":7,"CC":6.5,}\n```');

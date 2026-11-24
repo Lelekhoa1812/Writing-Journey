@@ -125,14 +125,30 @@ function synthesis(input) {
   };
 }
 
-function chatAssistant({ message, evaluationContext, history = [] }) {
-  const copy = modeCopy(evaluationContext || {});
+function examRulesCard() {
+  return [
+    'Published form limits. Quote these limits. Do not invent a different word count.',
+    'IELTS Part 1: at least 150 words, about 20 minutes.',
+    'IELTS Part 2: at least 250 words, about 40 minutes. The practice band runs from 0 to 9 in half bands.',
+    'PTE Summarize Written Text: one sentence of 5 to 75 words, about 10 minutes. Form is 0 outside that range or when the response is not one sentence.',
+    'PTE Write Essay: 200 to 300 words for full Form credit, about 20 minutes. Under 120 words, over 380 words, all capitals, or no punctuation scores 0.',
+    'A PTE item score is the sum of its trait points. Do not turn one item into a 10 to 90 score.',
+  ].join(' ');
+}
+
+function chatAssistant({ message, evaluationContext, history = [], mode, part }) {
+  const active = {
+    ...(evaluationContext || {}),
+    mode: evaluationContext?.mode || mode,
+    part: evaluationContext?.part || part,
+  };
+  const copy = modeCopy(active);
   const prior = history.length
     ? `Earlier turns:\n${history.map((item) => `${item.role}: ${item.content}`).join('\n')}\n\n`
     : '';
   return {
     name: 'Chat Assistant Agent',
-    system: `${copy.chat} The examiner scores are final. You may explain them. You may not invent a new score. You may call get_exam_rules, count_words, or get_score_snapshot when the student asks about limits, length, or scores. After a tool result, answer in short plain sentences.`,
+    system: `${copy.chat} Active mode: ${active.mode || 'IELTS'}. Active part: ${active.part || '2'}. ${examRulesCard()} The examiner scores are final. You may explain them. You may not invent a new score. You may call get_exam_rules, count_words, or get_score_snapshot when the student asks about limits, length, or scores. After a tool result, answer in short plain sentences.`,
     user: `${prior}Latest evaluation snapshot:\n${JSON.stringify(evaluationContext || {})}\n\nStudent message:\n${message}`,
   };
 }
