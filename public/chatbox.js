@@ -36,9 +36,13 @@ function openChatbox() {
 const COPY_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
 const CHECK_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
 
-function appendMessage(text, isUser) {
+function appendMessage(text, isUser, record = true) {
   const div = document.createElement('div');
   div.className = isUser ? 'chatbox-message-user' : 'chatbox-message-ai';
+  if (record) {
+    div.dataset.role = isUser ? 'user' : 'assistant';
+    div.dataset.raw = text;
+  }
   div.innerHTML = isUser ? escapeMessage(text) : renderAssistantMarkdown(text);
   if (!isUser) {
     const copyBtn = document.createElement('button');
@@ -67,9 +71,13 @@ chatboxForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   const userMsg = chatboxInput.value.trim();
   if (!userMsg) return;
+  const history = [...chatboxMessages.querySelectorAll('[data-raw]')].slice(-8).map((node) => ({
+    role: node.dataset.role === 'assistant' ? 'assistant' : 'user',
+    content: node.dataset.raw || '',
+  }));
   appendMessage(userMsg, true);
   chatboxInput.value = '';
-  const thinking = appendMessage('Reading your report context...', false);
+  const thinking = appendMessage('Reading your report context...', false, false);
   try {
     const response = await fetch('/chat-assist', {
       method: 'POST',
@@ -77,6 +85,7 @@ chatboxForm.addEventListener('submit', async (event) => {
       body: JSON.stringify({
         message: userMsg,
         evaluationContext: window.latestEvaluationContext || null,
+        history,
       }),
     });
     const data = await response.json();

@@ -16,6 +16,25 @@ Writing Journey is your personal, AI-powered writing coach designed to help you 
 - **Supports Both Writing Parts:** Whether it's a tricky graph (Part 1) or a complex essay (Part 2), Writing Journey is ready for any challenge—including image-based questions!
 - **Beautiful, Motivating Design:** Enjoy a modern, creative interface that makes practice feel less like a chore and more like a journey.
 
+## Configuration
+
+The app calls NVIDIA NIM at `https://integrate.api.nvidia.com/v1`.
+
+Set `NVIDIA_NIM_API_KEY_1` through `NVIDIA_NIM_API_KEY_9` in `.env`.
+You can also set `NVIDIA_NIM_API_KEYS` as a comma-separated list. Those keys load first.
+
+The pool rotates keys and keeps a 30 request per minute pace on each key.
+A bad key is paused for 10 minutes.
+A failed model moves to the end of the chain for 2 minutes.
+Scoring uses `nvidia/nemotron-3-ultra-550b-a55b`.
+Short agents use `poolside/laguna-xs-2.1`.
+Chart images use `nvidia/nemotron-3.5-super-vl-120b-a12b`.
+Thinking is off. JSON agents request `response_format: json_object`.
+The service streams from NIM and assembles the reply before it returns JSON.
+Prefix cache hits show up as `cachedTokens` on each agent trace.
+
+Check `GET /health` for the key count. The response does not include key values.
+
 ## How It Works
 1. **Choose your target band and writing part.**
 2. **Paste your question and answer** (or upload an image for Part 1).

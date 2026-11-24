@@ -1,6 +1,6 @@
 const { coerceArray, coerceString } = require('./jsonUtils');
 const { getExamConfig } = require('./examConfig');
-const { CRITERIA, safeBand, safeScore } = require('./score');
+const { CRITERIA, roundForScale, roundToHalf, safeScore } = require('./score');
 
 function requireObject(value, label) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -23,24 +23,31 @@ function normalizeAnalysis(value) {
     })),
     constraints: coerceArray(data.constraints).map(String),
     wordCount: Number(data.wordCount) || 0,
+    visualFacts: coerceArray(data.visualFacts).map(String).filter(Boolean).slice(0, 6),
   };
 }
 
-function normalizeExaminer(value, mode = 'IELTS') {
+function normalizeExaminer(value, mode = 'IELTS', facts = {}) {
   const data = requireObject(value, 'examiner');
   const config = getExamConfig(mode);
   const criteria = {};
   config.criteria.forEach((key) => {
     const item = data.criteria?.[key] || data[key] || {};
+    const raw = item.score ?? data[key];
+    const score = config.mode === 'IELTS'
+      ? roundToHalf(raw)
+      : roundForScale(safeScore(raw, config.scoreScale, config.scoreScale.min), config.scoreScale);
     criteria[key] = {
-      score: config.mode === 'IELTS'
-        ? safeBand(item.score ?? data[key])
-        : safeScore(item.score ?? data[key], config.scoreScale, config.scoreScale.min),
+      score,
       reason: coerceString(item.reason ?? data[`${key}_reason`], 'No reason supplied.'),
       evidence: coerceArray(item.evidence).map(String).slice(0, 4),
       nextStep: coerceString(item.nextStep, 'Focus on making this criterion more precise.'),
     };
   });
+  if (facts.formFailed && criteria.Form) {
+    criteria.Form.score = config.scoreScale.min;
+    criteria.Form.reason = facts.formReason || criteria.Form.reason;
+  }
   return { criteria };
 }
 

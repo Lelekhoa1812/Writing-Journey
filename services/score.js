@@ -1,4 +1,4 @@
-const { IELTS_CRITERIA, getExamConfig } = require('./examConfig');
+const { IELTS_CRITERIA, getExamConfig, getTaskConfig, normalizeMode } = require('./examConfig');
 
 const CRITERIA = IELTS_CRITERIA;
 
@@ -39,11 +39,38 @@ function getWordCount(text = '') {
   return String(text).trim().split(/\s+/).filter(Boolean).length;
 }
 
+function countSentences(text = '') {
+  return String(text).split(/[.!?]+/).map((part) => part.trim()).filter(Boolean).length;
+}
+
+function measureDraft(mode, part, answer) {
+  const task = getTaskConfig(mode, part);
+  const wordCount = getWordCount(answer);
+  const sentenceCount = countSentences(answer);
+  const belowMinimum = wordCount < (task.minWords || 0);
+  const aboveMaximum = Boolean(task.maxWords) && wordCount > task.maxWords;
+  const sentenceFail = Boolean(task.oneSentence) && sentenceCount !== 1;
+  const formFailed = normalizeMode(mode) === 'PTE' && (sentenceFail || belowMinimum || aboveMaximum);
+  const formReason = formFailed
+    ? `Form fails the practice gate. The draft has ${sentenceCount} sentence(s) and ${wordCount} words. The task needs ${task.recommendedWords}.`
+    : '';
+  return {
+    wordCount,
+    sentenceCount,
+    belowMinimum,
+    aboveMaximum,
+    formFailed,
+    formReason,
+  };
+}
+
 module.exports = {
   CRITERIA,
   calculateModeScore,
   calculateOverallScore,
+  countSentences,
   getWordCount,
+  measureDraft,
   roundToHalf,
   roundForScale,
   safeBand,

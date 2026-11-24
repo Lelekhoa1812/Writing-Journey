@@ -4,9 +4,19 @@ const path = require('path');
 require('dotenv').config();
 
 const { assistChat, evaluateWriting, generateQuestion } = require('./services/orchestrator');
+const { loadNimKeys } = require('./services/nimClient');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+app.get('/health', (req, res) => {
+  const keyCount = loadNimKeys().length;
+  return res.json({
+    ok: keyCount > 0,
+    provider: 'nvidia-nim',
+    keyCount,
+  });
+});
 
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));

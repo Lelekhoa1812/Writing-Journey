@@ -10,14 +10,16 @@ const {
   normalizeSynthesis,
 } = require('./validators');
 const { getExamConfig, getTaskConfig, normalizeMode } = require('./examConfig');
-const { calculateModeScore, getWordCount, safeBand, safeScore } = require('./score');
-const { createAzureClient, runJsonAgent, runTextAgent } = require('./azureClient');
+const { calculateModeScore, getWordCount, measureDraft, safeBand, safeScore } = require('./score');
+const { runJsonAgent, runTextAgent } = require('./azureClient');
+const { getNimPool, runToolLoop } = require('./nimClient');
+const { CHAT_TOOLS, compactEvaluation, compactHistory, executeChatTool } = require('./session');
 
 function getConfig(overrides = {}) {
   return {
-    model: overrides.model || process.env.AZURE_AI_FOUNDRY_MODEL || 'gpt-5.4-mini',
-    slm: overrides.slm || process.env.AZURE_AI_FOUNDRY_SLM || 'gpt-5-nano',
-    timeoutMs: Number(overrides.timeoutMs || process.env.AZURE_AI_FOUNDRY_TIMEOUT_MS || 60000),
+    model: overrides.model || process.env.NIM_LLM_ROLE || 'llm',
+    slm: overrides.slm || process.env.NIM_SLM_ROLE || 'slm',
+    timeoutMs: Number(overrides.timeoutMs || process.env.NIM_TIMEOUT_MS || 90000),
   };
 }
 
@@ -160,7 +162,7 @@ function buildLegacyCorrection(correction) {
 }
 
 function makeAgentRunner(client, config, callModel) {
-  return (agentPrompt, model, validate, fallback, images = []) => runJsonAgent({
+  return (agentPrompt, model, validate, fallback, images = [], limits = {}) => runJsonAgent({
     client,
     model,
     name: agentPrompt.name,
@@ -170,13 +172,16 @@ function makeAgentRunner(client, config, callModel) {
     fallback,
     images,
     timeoutMs: config.timeoutMs,
+    maxTokens: limits.maxTokens,
+    temperature: limits.temperature,
+    maxRetries: limits.maxRetries || 2,
     callModel,
   });
 }
 
 async function evaluateWriting(payload, options = {}) {
   const config = getConfig(options);
-  const client = options.client || createAzureClient(options);
+  const client = options.client || getNimPool();
   const callModel = options.callModel;
   const input = baseInput(payload);
   const runAgent = makeAgentRunner(client, config, callModel);
@@ -187,15 +192,36 @@ async function evaluateWriting(payload, options = {}) {
   // contracts explicit so the UI can teach from structured evidence instead of free-form blobs.
   const analysisPrompt = prompts.inputAnalyzer(input);
   const images = input.image ? [input.image] : [];
-  const analysisResult = await runAgent(analysisPrompt, config.slm, normalizeAnalysis, () => fallbackAnalysis(input), images);
+  const fastLimits = { maxTokens: 2048, temperature: 0.2 };
+  const scoreLimits = { maxTokens: 4096, temperature: 0 };
+  const proseLimits = { maxTokens: 8192, temperature: 0.2 };
+  const analysisResult = await runAgent(
+    analysisPrompt,
+    config.slm,
+    normalizeAnalysis,
+    () => fallbackAnalysis(input),
+    images,
+    fastLimits,
+  );
   traces.push(analysisResult.trace);
-  const withAnalysis = { ...input, analysis: analysisResult.data };
+  const measured = measureDraft(input.mode, input.part, input.answer);
+  const analysis = {
+    ...analysisResult.data,
+    wordCount: measured.wordCount,
+    visualFacts: analysisResult.data.visualFacts || [],
+  };
+  const withAnalysis = {
+    ...input,
+    ...measured,
+    analysis,
+    visualFacts: analysis.visualFacts,
+  };
 
   const [examinerResult, diagnosisResult, correctionResult, modelAnswerResult] = await Promise.all([
-    runAgent(prompts.examiner(withAnalysis), config.model, (value) => normalizeExaminer(value, input.mode), () => fallbackExaminer(input), images),
-    runAgent(prompts.diagnosis(withAnalysis), config.model, normalizeDiagnosis, fallbackDiagnosis, images),
-    runAgent(prompts.correction(withAnalysis), config.model, normalizeCorrection, fallbackCorrection, images),
-    runAgent(prompts.modelAnswer(withAnalysis), config.model, normalizeModelAnswer, fallbackModelAnswer, images),
+    runAgent(prompts.examiner(withAnalysis), config.model, (value) => normalizeExaminer(value, input.mode, measured), () => fallbackExaminer(input), [], scoreLimits),
+    runAgent(prompts.diagnosis(withAnalysis), config.model, normalizeDiagnosis, fallbackDiagnosis, [], scoreLimits),
+    runAgent(prompts.correction(withAnalysis), config.model, normalizeCorrection, fallbackCorrection, [], proseLimits),
+    runAgent(prompts.modelAnswer(withAnalysis), config.model, normalizeModelAnswer, fallbackModelAnswer, [], proseLimits),
   ]);
   traces.push(examinerResult.trace, diagnosisResult.trace, correctionResult.trace, modelAnswerResult.trace);
 
@@ -204,18 +230,17 @@ async function evaluateWriting(payload, options = {}) {
     examiner: examinerResult.data,
     diagnosis: diagnosisResult.data,
   };
-  const learningResult = await runAgent(prompts.learningPlan(learningInput), config.slm, normalizeLearningPlan, fallbackLearningPlan);
-  traces.push(learningResult.trace);
-
   const synthesisInput = {
     ...withAnalysis,
     examiner: examinerResult.data,
     diagnosis: diagnosisResult.data,
     correction: correctionResult.data,
-    learningPlan: learningResult.data,
   };
-  const synthesisResult = await runAgent(prompts.synthesis(synthesisInput), config.model, normalizeSynthesis, fallbackSynthesis);
-  traces.push(synthesisResult.trace);
+  const [learningResult, synthesisResult] = await Promise.all([
+    runAgent(prompts.learningPlan(learningInput), config.slm, normalizeLearningPlan, fallbackLearningPlan, [], fastLimits),
+    runAgent(prompts.synthesis(synthesisInput), config.slm, normalizeSynthesis, fallbackSynthesis, [], fastLimits),
+  ]);
+  traces.push(learningResult.trace, synthesisResult.trace);
 
   const flatCriteria = flattenCriteria(examinerResult.data, input.mode);
   const score = calculateModeScore(flatCriteria, input.mode);
@@ -224,6 +249,7 @@ async function evaluateWriting(payload, options = {}) {
 
   return {
     mode: input.mode,
+    scoreNotice: 'Practice estimate. This is not an official test score.',
     targetScore: input.targetScore,
     scoreScale: examConfig.scoreScale,
     taskLabel: taskConfig.label,
@@ -252,27 +278,69 @@ async function evaluateWriting(payload, options = {}) {
 
 async function assistChat(payload, options = {}) {
   const config = getConfig(options);
-  const client = options.client || createAzureClient(options);
+  const client = options.client || (options.callModel ? {} : getNimPool());
+  const evaluationContext = compactEvaluation(payload.evaluationContext);
+  const history = compactHistory(payload.history);
   const prompt = prompts.chatAssistant({
     message: payload.message || '',
-    evaluationContext: payload.evaluationContext || null,
+    evaluationContext,
+    history: options.callModel || typeof client.complete !== 'function' ? history : [],
   });
-  const result = await runTextAgent({
-    client,
-    model: config.slm,
-    name: prompt.name,
-    system: prompt.system,
-    user: prompt.user,
-    fallback: 'I could not get a reliable response after several attempts. Please try again with a shorter question.',
-    timeoutMs: config.timeoutMs,
-    callModel: options.callModel,
-  });
-  return { reply: result.data, agentTraceSummary: [result.trace] };
+  if (options.callModel || typeof client.complete !== 'function') {
+    const result = await runTextAgent({
+      client,
+      model: config.slm,
+      name: prompt.name,
+      system: prompt.system,
+      user: prompt.user,
+      fallback: 'I could not get a reliable response after several attempts. Please try again with a shorter question.',
+      timeoutMs: config.timeoutMs,
+      callModel: options.callModel,
+    });
+    return { reply: result.data, agentTraceSummary: [result.trace] };
+  }
+
+  try {
+    const result = await runToolLoop({
+      pool: client,
+      role: config.slm,
+      timeoutMs: config.timeoutMs,
+      tools: CHAT_TOOLS,
+      execute: (name, args) => executeChatTool(name, args, evaluationContext),
+      messages: [
+        { role: 'system', content: prompt.system },
+        ...history.map((item) => ({ role: item.role, content: item.content })),
+        { role: 'user', content: prompt.user },
+      ],
+    });
+    return {
+      reply: result.text,
+      agentTraceSummary: [{
+        name: prompt.name,
+        model: result.model,
+        keySlot: result.keySlot,
+        cachedTokens: result.cachedTokens ?? null,
+        attempts: 1,
+        ok: true,
+      }],
+    };
+  } catch (error) {
+    return {
+      reply: 'I could not get a reliable response after several attempts. Please try again with a shorter question.',
+      agentTraceSummary: [{
+        name: prompt.name,
+        model: config.slm,
+        attempts: 1,
+        ok: false,
+        error: error.message,
+      }],
+    };
+  }
 }
 
 async function generateQuestion(payload, options = {}) {
   const config = getConfig(options);
-  const client = options.client || createAzureClient(options);
+  const client = options.client || getNimPool();
   const input = baseInput({ ...payload, answer: '' });
   const prompt = prompts.questionGenerator(input);
   // Motivation vs Logic: generated questions need the same mode/task discipline as evaluation,

@@ -32,7 +32,7 @@ const examModes = {
     targetPlaceholder: 'Select Band',
     targetValues: ['4.5', '5.0', '5.5', '6.0', '6.5', '7.0', '7.5', '8.0', '8.5', '9.0'],
     defaultTarget: '7.0',
-    scoreLabel: 'Estimated band',
+    scoreLabel: 'Practice band',
     scoreMax: 9,
     scorePrecision: 1,
     chatPlaceholder: 'Ask about this report or IELTS writing...',
@@ -49,7 +49,7 @@ const examModes = {
     targetPlaceholder: 'Select Score',
     targetValues: ['10', '20', '30', '36', '42', '50', '58', '65', '73', '79', '84', '90'],
     defaultTarget: '65',
-    scoreLabel: 'Estimated score',
+    scoreLabel: 'Practice score',
     scoreMax: 90,
     scorePrecision: 0,
     chatPlaceholder: 'Ask about this report or PTE writing...',
@@ -251,7 +251,7 @@ function stopLoader() {
 function toBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onload = () => resolve(String(reader.result || ''));
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });

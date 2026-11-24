@@ -1,4 +1,5 @@
 const { MODE_PTE, getExamConfig, getTaskConfig } = require('./examConfig');
+const { rubricCard } = require('./rubric');
 
 function commonContext(input) {
   const config = getExamConfig(input.mode);
@@ -9,7 +10,12 @@ function commonContext(input) {
     `${config.targetLabel}: ${target}`,
     `Writing task: ${task.promptLabel}`,
     `Task guidance: ${task.recommendedWords}${task.oneSentence ? '; the response must be one sentence.' : ''}`,
-    `Question: ${input.question || `No typed question supplied. If an image is attached, inspect it for the ${config.label} task prompt or visual data.`}`,
+    `Question: ${input.question || 'No typed question supplied.'}`,
+    `Measured words: ${input.wordCount ?? 'unknown'}`,
+    `Measured sentences: ${input.sentenceCount ?? 'unknown'}`,
+    input.belowMinimum ? 'The draft is under the task minimum.' : '',
+    input.aboveMaximum ? 'The draft is over the task maximum.' : '',
+    input.visualFacts?.length ? `Chart facts: ${input.visualFacts.join('; ')}` : '',
     input.analysis ? `Known analysis: ${JSON.stringify(input.analysis)}` : '',
     `User answer:\n${input.answer}`,
   ].filter(Boolean).join('\n\n');
@@ -48,7 +54,7 @@ function inputAnalyzer(input) {
   return {
     name: 'Input Analyzer Agent',
     system: `${copy.analyst} ${jsonRule}`,
-    user: `${commonContext(input)}\n\nReturn JSON: {"taskType":"","promptRequirements":[""],"userThesis":"","paragraphMap":[{"paragraph":1,"purpose":"","strength":"","concern":""}],"constraints":[""],"wordCount":0}`,
+    user: `${commonContext(input)}\n\nIf a chart image is attached, put up to six short facts in visualFacts. Otherwise return an empty array. Return JSON: {"taskType":"","promptRequirements":[""],"userThesis":"","paragraphMap":[{"paragraph":1,"purpose":"","strength":"","concern":""}],"constraints":[""],"wordCount":0,"visualFacts":[""]}`,
   };
 }
 
@@ -63,7 +69,7 @@ function examiner(input) {
   }]));
   return {
     name: `${config.label} Examiner Agent`,
-    system: `${copy.examiner} Return criterion scores on the ${config.scoreScale.min}-${config.scoreScale.max} scale. ${jsonRule}`,
+    system: `${copy.examiner} These scores are a practice estimate, not an official result. Quote the student before you score. The measured word count is final. ${rubricCard(input)} Return criterion scores on the ${config.scoreScale.min}-${config.scoreScale.max} scale. ${jsonRule}`,
     user: `${commonContext(input)}\n\nReturn JSON: ${JSON.stringify({ criteria: criteriaShape })}`,
   };
 }
@@ -108,22 +114,24 @@ function synthesis(input) {
   const copy = modeCopy(input);
   return {
     name: 'Synthesis Agent',
-    system: `${copy.synthesis} ${jsonRule}`,
+    system: `${copy.synthesis} The examiner scores are final. Do not calculate a new score. ${jsonRule}`,
     user: `${commonContext(input)}\n\nSpecialist reports:\n${JSON.stringify({
       examiner: input.examiner,
       diagnosis: input.diagnosis,
       correction: input.correction,
-      learningPlan: input.learningPlan,
     })}\n\nReturn JSON: {"overview":"","targetBandGap":[""],"topPriorities":[""],"encouragement":""}`,
   };
 }
 
-function chatAssistant({ message, evaluationContext }) {
+function chatAssistant({ message, evaluationContext, history = [] }) {
   const copy = modeCopy(evaluationContext || {});
+  const prior = history.length
+    ? `Earlier turns:\n${history.map((item) => `${item.role}: ${item.content}`).join('\n')}\n\n`
+    : '';
   return {
     name: 'Chat Assistant Agent',
-    system: copy.chat,
-    user: `Latest evaluation context:\n${JSON.stringify(evaluationContext || {})}\n\nStudent message:\n${message}`,
+    system: `${copy.chat} The examiner scores are final. You may explain them. You may not invent a new score. You may call get_exam_rules, count_words, or get_score_snapshot when the student asks about limits, length, or scores. After a tool result, answer in short plain sentences.`,
+    user: `${prior}Latest evaluation snapshot:\n${JSON.stringify(evaluationContext || {})}\n\nStudent message:\n${message}`,
   };
 }
 

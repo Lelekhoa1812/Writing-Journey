@@ -800,6 +800,14 @@ span.hl-note {
   line-height: 1;
 }
 
+.score-notice {
+  margin: 8px 0 0;
+  max-width: 16rem;
+  color: var(--muted, var(--text));
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
 .criterion-bars {
   display: grid;
   gap: 12px;

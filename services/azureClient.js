@@ -50,7 +50,31 @@ function buildUserContent(user, images = []) {
   return content;
 }
 
-async function callTextModel({ client, model, system, user, images = [], timeoutMs }) {
+async function callTextModel({
+  client,
+  model,
+  system,
+  user,
+  images = [],
+  timeoutMs,
+  json = false,
+  maxTokens,
+  temperature,
+}) {
+  if (client && typeof client.complete === 'function') {
+    const result = await client.complete({
+      role: model,
+      system,
+      user,
+      images,
+      timeoutMs,
+      json,
+      maxTokens,
+      temperature,
+    });
+    return result.text;
+  }
+
   const request = {
     model,
     input: [
@@ -87,13 +111,17 @@ async function runJsonAgent({
   fallback,
   maxRetries = DEFAULT_MAX_RETRIES,
   timeoutMs = DEFAULT_TIMEOUT_MS,
+  maxTokens,
+  temperature,
   callModel = callTextModel,
 }) {
   let lastError = null;
+  let attemptsUsed = 0;
   // Root Cause vs Logic: LLMs sometimes return prose, fenced JSON, or partial structures even
   // when prompted strictly; retrying the same agent contract up to five times prevents one
   // malformed specialist response from becoming an immediate user-facing failure.
   for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
+    attemptsUsed = attempt;
     try {
       const retryInstruction = attempt === 1
         ? ''
@@ -105,16 +133,27 @@ async function runJsonAgent({
         user: `${user}${retryInstruction}`,
         images,
         timeoutMs,
+        json: true,
+        maxTokens,
+        temperature,
       });
       const parsed = extractJson(raw);
       if (!parsed) throw new Error('No valid JSON object found');
       const normalized = validate ? validate(parsed) : parsed;
       return {
         data: normalized,
-        trace: { name, model, attempts: attempt, ok: true },
+        trace: {
+          name,
+          model: client?.lastCall?.model || model,
+          keySlot: client?.lastCall?.keySlot,
+          cachedTokens: client?.lastCall?.cachedTokens ?? null,
+          attempts: attempt,
+          ok: true,
+        },
       };
     } catch (error) {
       lastError = error;
+      if (error?.code === 'nim_exhausted') break;
     }
   }
 
@@ -123,7 +162,7 @@ async function runJsonAgent({
     trace: {
       name,
       model,
-      attempts: maxRetries,
+      attempts: attemptsUsed,
       ok: false,
       error: lastError?.message || 'Agent failed',
     },
@@ -146,7 +185,17 @@ async function runTextAgent({
     try {
       const text = await callModel({ client, model, system, user, timeoutMs });
       if (text.trim()) {
-        return { data: text.trim(), trace: { name, model, attempts: attempt, ok: true } };
+        return {
+          data: text.trim(),
+          trace: {
+            name,
+            model: client?.lastCall?.model || model,
+            keySlot: client?.lastCall?.keySlot,
+            cachedTokens: client?.lastCall?.cachedTokens ?? null,
+            attempts: attempt,
+            ok: true,
+          },
+        };
       }
       throw new Error('Empty model response');
     } catch (error) {
