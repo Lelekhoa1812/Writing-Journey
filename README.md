@@ -4,7 +4,7 @@ Writing Journey marks an IELTS or PTE writing draft. You get a practice score, t
 
 ---
 
-**APP** [Live Demo](https://ielts-writing-boost.vercel.app)
+**APP** [Live Demo](https://writer-three-mocha.vercel.app)
 
 ## What you can do
 
