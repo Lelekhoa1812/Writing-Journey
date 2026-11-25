@@ -34,6 +34,7 @@ function baseInput(payload) {
     question: payload.question || '',
     answer: payload.answer || '',
     image: payload.image || '',
+    planningNotes: payload.notes || payload.planningNotes || '',
   };
 }
 

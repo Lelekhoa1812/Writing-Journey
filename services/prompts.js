@@ -16,6 +16,7 @@ function commonContext(input) {
     input.aboveMaximum ? 'The draft is over the task maximum.' : '',
     input.visualFacts?.length ? `Chart facts: ${input.visualFacts.join('; ')}` : '',
     input.analysis ? `Known analysis: ${JSON.stringify(input.analysis)}` : '',
+    input.planningNotes ? `Candidate plan:\n${input.planningNotes}` : '',
     `User answer:\n${input.answer}`,
   ].filter(Boolean).join('\n\n');
 }

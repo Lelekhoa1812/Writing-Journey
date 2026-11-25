@@ -13,7 +13,7 @@ test('frontend exposes theme toggle and structured report containers', () => {
   ['theme-toggle', 'generate-question-btn', 'timer-toggle'].forEach((id) => {
     assert.match(app, new RegExp(`id="${id}"`));
   });
-  ['score-label', 'criterion-bars', 'sentence-output', 'idea-output', 'cohesion-output', 'vocab-output', 'grammar-output'].forEach((id) => {
+  ['score-label', 'criterion-bars', 'sentence-output', 'idea-output', 'cohesion-output', 'vocab-output', 'grammar-output', 'diagnosis-output'].forEach((id) => {
     assert.match(report, new RegExp(`id="${id}"`));
   });
 });

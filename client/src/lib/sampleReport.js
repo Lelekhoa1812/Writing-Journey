@@ -1,0 +1,116 @@
+export const sampleReport = {
+  mode: 'IELTS',
+  score: 6.5,
+  scoreNotice: 'Practice estimate. This is not an official test score.',
+  scoreScale: { min: 0, max: 9, precision: 1 },
+  targetScore: '7.0',
+  taskLabel: 'Part 2',
+  wordCount: 268,
+  TR: 6.5,
+  CC: 7,
+  LR: 6.5,
+  GR: 6,
+  overview: 'The position is clear and the paragraphs follow it. The examples name a result, then stop before the cause, so the argument stays one step short of band 7.',
+  encouragement: 'The opening and the paragraph order can stay. Put the next hour into one cause-and-effect chain.',
+  targetBandGap: ['Develop the example before the result', 'Replace two awkward collocations'],
+  topPriorities: [
+    'Add the cause, not only the result, in each body paragraph.',
+    'Replace “make a damage” with a real collocation.',
+    'Proofread subject-verb agreement in the conclusion.',
+  ],
+  criteria: {
+    TR: {
+      score: 6.5,
+      max: 9,
+      label: 'Task response',
+      reason: 'Both views are present and the writer’s position is stated. The support names outcomes without explaining why they follow.',
+      evidence: ['The volunteer example ends on “help the community”.'],
+      nextStep: 'Write the cause, then the result, in one sentence.',
+    },
+    CC: {
+      score: 7,
+      max: 9,
+      label: 'Coherence and cohesion',
+      reason: 'The four paragraphs have a job each, and the links are easy to follow.',
+      evidence: ['Each body paragraph opens with a clear topic sentence.'],
+      nextStep: 'Keep this order. Do not add extra linkers.',
+    },
+    LR: {
+      score: 6.5,
+      max: 9,
+      label: 'Lexical resource',
+      reason: 'The range is adequate, with two collocations that a band 7 script would not use.',
+      evidence: ['“make a damage”', '“be benefit”'],
+      nextStep: 'Swap each phrase for the collocation in the clinic.',
+    },
+    GR: {
+      score: 6,
+      max: 9,
+      label: 'Grammatical range and accuracy',
+      reason: 'Clauses are attempted. Agreement slips when the subject is far from the verb.',
+      evidence: ['“The number of volunteers have increased.”'],
+      nextStep: 'Match the verb to the head noun, not the nearest noun.',
+    },
+  },
+  diagnostics: [
+    {
+      criterion: 'TR',
+      issue: 'The example stops at the result.',
+      rootCause: 'The sentence explains what happened, not why it happened.',
+      whyItMatters: 'Band 7 task response needs a developed idea, not a topic plus a claim.',
+      fixStrategy: 'Add one because-clause before the result.',
+    },
+  ],
+  sentenceInsights: [
+    {
+      sentenceNumber: 4,
+      original: 'Unpaid work can make a damage when the visit is short.',
+      revised: 'Unpaid work can cause harm when the visit is short.',
+      whyWrong: '“Make a damage” is not an English collocation.',
+      principle: 'Use a verb that already belongs with the noun.',
+    },
+  ],
+  ideaInsights: [
+    {
+      originalIdea: 'Volunteers help poorer communities.',
+      problem: 'The claim is too broad to score as developed support.',
+      deeperAlternative: 'A two-week building project can leave a house unfinished when the group flies home.',
+    },
+  ],
+  cohesionMap: [
+    { step: 1, role: 'Position', linkQuality: 'The introduction states the writer’s view.', improvement: 'Keep it.' },
+    { step: 2, role: 'First reason', linkQuality: 'The topic sentence matches the question.', improvement: 'Add the cause inside this paragraph.' },
+  ],
+  vocabularyUpgrades: [
+    { original: 'make a damage', upgrade: 'cause harm', reason: 'Natural verb-noun pair.' },
+    { original: 'be benefit', upgrade: 'be beneficial', reason: 'The adjective is the word that follows “be”.' },
+  ],
+  grammarPatterns: [
+    {
+      pattern: 'Agreement with the head noun',
+      problem: 'The verb follows the nearest noun, not the subject.',
+      exampleFix: 'The number of volunteers has increased.',
+    },
+  ],
+  correction: 'Unpaid work can <->make a damage</-><+>cause harm</+> when the visit is short. A planned project can <->be benefit</-><+>be beneficial</+> for the host community. The number of volunteers <->have</-><+>has</+> increased.',
+  correctionNotes: [
+    '“Make a damage” becomes “cause harm” because the verb has to collocate with the noun.',
+    'Match “has” to “number”, not to “volunteers”.',
+  ],
+  modelAnswer: 'Some young people spend a short time doing unpaid work abroad. The position of this essay is that the work helps only when the project can be finished by local staff after the visitors leave.\n\nA two-week building trip can cause harm if the group leaves a house half built. The host community then spends money to finish work it did not choose.\n\nThe same visit can be beneficial when a local organisation sets the task and keeps the tools. The visitors add labour. The community keeps the result.\n\nUnpaid work abroad should be judged by what remains, not by the intention of the visitor.',
+  modelAnswerNotes: ['One position, two developed reasons, and a close that repeats the test.'],
+  practicePlan: [
+    {
+      priority: 1,
+      focus: 'Develop one example',
+      drill: 'Rewrite the volunteer paragraph with a because-clause before the result.',
+      successSignal: 'A reader can point to the cause and the result in the same paragraph.',
+    },
+    {
+      priority: 2,
+      focus: 'Collocations',
+      drill: 'Replace “make a damage” and “be benefit” in the draft, then read the sentences aloud.',
+      successSignal: 'Both sentences use the upgraded phrase and still fit the argument.',
+    },
+  ],
+};

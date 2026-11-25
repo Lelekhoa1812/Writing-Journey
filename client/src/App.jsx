@@ -4,6 +4,7 @@ import Button from './components/Button';
 import Report from './components/Report';
 import { examModes, MODE_STORAGE_KEY, sentenceCount, wordCount } from './lib/exam';
 import { escapeMessage } from './lib/format';
+import { sampleReport } from './lib/sampleReport';
 
 const LOADER_TIPS = [
   'The examiner is separating score evidence from style preference.',
@@ -11,6 +12,8 @@ const LOADER_TIPS = [
   'The correction coach is turning a mistake into a rule.',
   'The synthesis is writing the next practice step.',
 ];
+
+const LOADER_NAMES = ['Examiner', 'Diagnosis', 'Coach', 'Synthesis'];
 
 function readFile(file) {
   return new Promise((resolve, reject) => {
@@ -21,8 +24,14 @@ function readFile(file) {
   });
 }
 
+function readMode() {
+  const stored = localStorage.getItem(MODE_STORAGE_KEY);
+  return examModes[stored] ? stored : 'IELTS';
+}
+
 export default function App() {
-  const [mode, setMode] = useState(() => localStorage.getItem(MODE_STORAGE_KEY) || 'IELTS');
+  const preview = useMemo(() => new URLSearchParams(window.location.search).get('sheet') === 'sample', []);
+  const [mode, setMode] = useState(readMode);
   const [theme, setTheme] = useState(() => localStorage.getItem('ielts-theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
   const config = examModes[mode] || examModes.IELTS;
   const [target, setTarget] = useState(config.defaultTarget);
@@ -36,16 +45,19 @@ export default function App() {
   const [imageData, setImageData] = useState('');
   const [busy, setBusy] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [phase, setPhase] = useState('empty');
-  const [report, setReport] = useState(null);
+  const [notice, setNotice] = useState('');
+  const [confirm, setConfirm] = useState(null);
+  const [phase, setPhase] = useState(preview ? 'report' : 'empty');
+  const [report, setReport] = useState(preview ? sampleReport : null);
   const [tip, setTip] = useState(0);
   const [expanded, setExpanded] = useState(false);
   const [timerOpen, setTimerOpen] = useState(false);
-  const [timerSeconds, setTimerSeconds] = useState(20 * 60);
-  const [timerLeft, setTimerLeft] = useState(20 * 60);
+  const [timerSeconds, setTimerSeconds] = useState(config.tasks['2'].timeMinutes * 60);
+  const [timerLeft, setTimerLeft] = useState(config.tasks['2'].timeMinutes * 60);
   const [timerOn, setTimerOn] = useState(false);
   const [timeUp, setTimeUp] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [chatBusy, setChatBusy] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const [messages, setMessages] = useState([]);
   const [exporting, setExporting] = useState(false);
@@ -53,9 +65,13 @@ export default function App() {
   const reportRef = useRef(null);
   const imageRef = useRef(null);
 
+  const task = config.tasks[part] || config.tasks['2'];
+
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem('ielts-theme', theme);
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.content = theme === 'dark' ? '#100e0c' : '#1c1915';
   }, [theme]);
 
   useEffect(() => {
@@ -64,6 +80,18 @@ export default function App() {
     setTarget(next.defaultTarget);
     setPart('2');
   }, [mode]);
+
+  useEffect(() => {
+    const minutes = task.timeMinutes;
+    setTimerSeconds(minutes * 60);
+    setTimerLeft(minutes * 60);
+    setTimerOn(false);
+    setTimeUp(false);
+  }, [mode, part, task.timeMinutes]);
+
+  useEffect(() => {
+    document.title = `Writing Journey · ${config.label} ${task.label}`;
+  }, [config.label, task.label]);
 
   useEffect(() => {
     if (!busy) return undefined;
@@ -86,10 +114,23 @@ export default function App() {
     return () => clearInterval(id);
   }, [timerOn]);
 
-  const task = config.tasks[part] || config.tasks['2'];
+  useEffect(() => {
+    function onKey(event) {
+      if (event.key !== 'Escape') return;
+      setExpanded(false);
+      setTimerOpen(false);
+      setChatOpen(false);
+      setConfirm(null);
+      setTimeUp(false);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   const count = wordCount(answer);
   const countWarn = count > 0 && (count < task.minWords || (task.maxWords && count > task.maxWords));
-  const countTone = count === 0 ? 'text-muted' : countWarn ? 'text-warn' : 'text-good';
+  const countTone = count === 0 ? '' : countWarn ? 'count-warn' : 'count-ready';
+  const meterWidth = Math.max(0, Math.min(100, task.minWords ? (count / task.minWords) * 100 : 0));
   const clock = useMemo(() => {
     const minutes = String(Math.floor(timerLeft / 60)).padStart(2, '0');
     const seconds = String(timerLeft % 60).padStart(2, '0');
@@ -115,8 +156,16 @@ export default function App() {
     setImageData(data);
   }
 
+  function clearImage() {
+    setImageName('');
+    setImagePreview('');
+    setImageData('');
+    if (imageRef.current) imageRef.current.value = '';
+  }
+
   async function generateQuestion() {
     setGenerating(true);
+    setNotice('');
     try {
       const response = await fetch('/generate-question', {
         method: 'POST',
@@ -133,20 +182,18 @@ export default function App() {
       setQuestion(text);
       if (questionRef.current) questionRef.current.innerText = text;
     } catch (error) {
-      window.alert(error.message || 'Could not generate a question. Please try again.');
+      setNotice(error.message || 'Could not generate a question. Please try again.');
     } finally {
       setGenerating(false);
     }
   }
 
-  async function onSubmit(event) {
-    event.preventDefault();
-    const sentences = sentenceCount(answer);
-    if (task.oneSentence && sentences > 1 && !window.confirm('PTE Summarize Written Text should be one sentence. Continue?')) return;
-    if (countWarn && !window.confirm(`Your answer is outside the recommended range (${task.guidance}). Continue?`)) return;
+  async function runEvaluation() {
+    setConfirm(null);
     setBusy(true);
     setPhase('loading');
     setTip(0);
+    setNotice('');
     try {
       const response = await fetch('/evaluate', {
         method: 'POST',
@@ -158,6 +205,7 @@ export default function App() {
           part,
           question,
           answer,
+          notes,
           image: imageData,
         }),
       });
@@ -174,13 +222,28 @@ export default function App() {
     }
   }
 
+  function onSubmit(event) {
+    event.preventDefault();
+    const sentences = sentenceCount(answer);
+    if (task.oneSentence && sentences > 1) {
+      setConfirm('sentence');
+      return;
+    }
+    if (countWarn) {
+      setConfirm('length');
+      return;
+    }
+    runEvaluation();
+  }
+
   async function sendChat(event) {
     event.preventDefault();
     const text = chatInput.trim();
-    if (!text) return;
+    if (!text || chatBusy) return;
     const history = messages.slice(-8);
     setMessages((items) => [...items, { role: 'user', content: text }]);
     setChatInput('');
+    setChatBusy(true);
     try {
       const response = await fetch('/chat-assist', {
         method: 'POST',
@@ -197,6 +260,8 @@ export default function App() {
       setMessages((items) => [...items, { role: 'assistant', content: response.ok ? data.reply : (data.error || 'Could not get a response.') }]);
     } catch {
       setMessages((items) => [...items, { role: 'assistant', content: 'Could not get a response after retrying. Please try again.' }]);
+    } finally {
+      setChatBusy(false);
     }
   }
 
@@ -206,7 +271,8 @@ export default function App() {
     try {
       const html2canvas = (await import('html2canvas')).default;
       const { jsPDF } = await import('jspdf');
-      const canvas = await html2canvas(reportRef.current, { scale: 2, backgroundColor: '#ffffff' });
+      const backgroundColor = getComputedStyle(document.documentElement).getPropertyValue('--sheet').trim() || '#fbf8f3';
+      const canvas = await html2canvas(reportRef.current, { scale: 2, backgroundColor });
       const pdf = new jsPDF('p', 'mm', 'a4');
       const imgWidth = 210;
       const pageHeight = 295;
@@ -227,178 +293,223 @@ export default function App() {
     }
   }
 
+  const confirmCopy = confirm === 'sentence'
+    ? 'Summarize Written Text should be one sentence. Mark this draft anyway?'
+    : `This draft is outside the recommended range (${task.guidance}). Mark it anyway?`;
+
   return (
-    <div className="min-h-screen bg-desk text-ink">
-      <header className="flex items-center justify-between gap-4 bg-rail px-4 py-3 text-white md:px-6">
-        <h1 className="text-xl font-semibold tracking-tight">Writing Journey</h1>
-        <div className="flex items-center gap-2">
-          <fieldset className="flex rounded-md bg-white/10 p-1" aria-label="Writing test mode">
+    <div className="app">
+      <a className="skip" href="#ielts-form">Skip to the draft</a>
+      <header className="topbar">
+        <div className="brand">
+          <span className="brand-mark" aria-hidden="true">WJ</span>
+          <div>
+            <h1>Writing Journey</h1>
+            <p className="session">{config.label} · {task.label} · target {target}</p>
+          </div>
+        </div>
+        <div className="top-actions">
+          <fieldset className="mode-switch" aria-label="Writing test mode">
             {['IELTS', 'PTE'].map((value) => (
-              <label key={value} className="cursor-pointer">
+              <label key={value}>
                 <input className="sr-only" type="radio" name="writing-mode" value={value} checked={mode === value} onChange={() => setMode(value)} />
-                <span className={`block rounded px-3 py-1 text-sm ${mode === value ? 'bg-white text-rail' : ''}`}>{value}</span>
+                <span>{value}</span>
               </label>
             ))}
           </fieldset>
-          <Button id="theme-toggle" tone="ghost" className="text-white" aria-label="Toggle theme" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
-            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-          </Button>
-          <Button id="timer-toggle" tone="ghost" className="text-white" aria-label="Exam timer" onClick={() => setTimerOpen(true)}>
+          <Button id="timer-toggle" tone="ghost" aria-expanded={timerOpen} aria-label={`Exam timer ${clock}`} onClick={() => setTimerOpen((open) => !open)}>
             <Timer size={16} />
+            <span>{clock}</span>
+          </Button>
+          <Button id="draggable-chatbot" tone="ghost" aria-expanded={chatOpen} onClick={() => setChatOpen((open) => !open)}>
+            <MessageSquare size={16} />
+            Ask
+          </Button>
+          <Button id="theme-toggle" tone="ghost" className="btn-icon" aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'} onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
+            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
           </Button>
         </div>
       </header>
 
-      <main className="grid min-h-[calc(100vh-56px)] md:h-[calc(100vh-56px)] md:grid-cols-2 md:overflow-hidden">
-        <form id="ielts-form" className="border-r border-line bg-sheet p-4 md:overflow-auto md:p-6" onSubmit={onSubmit}>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="grid gap-1 text-sm font-semibold" id="target-label">
-              {config.targetLabel}
-              <select id="band-select" className="rounded-md border border-line bg-sheet px-3 py-2 font-normal" value={target} onChange={(event) => setTarget(event.target.value)} required>
-                {config.targetValues.map((value) => <option key={value} value={value}>{value}</option>)}
-              </select>
-            </label>
-            <label className="grid gap-1 text-sm font-semibold" id="part-label">
-              {mode === 'PTE' ? 'Writing task' : 'Writing part'}
-              <select id="part-select" className="rounded-md border border-line bg-sheet px-3 py-2 font-normal" value={part} onChange={(event) => setPart(event.target.value)} required>
-                {Object.entries(config.tasks).map(([value, item]) => <option key={value} value={value}>{item.label}</option>)}
-              </select>
-            </label>
-          </div>
-
-          <div className="mt-5">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <label className="text-sm font-semibold" htmlFor="question-display">Question</label>
-              <div className="flex gap-1">
-                <Button id="btn-highlight" tone="quiet" aria-label="Highlight" onClick={() => markQuestion('hiliteColor')}><Highlighter size={14} /></Button>
-                <Button id="btn-underline" tone="quiet" aria-label="Underline" onClick={() => markQuestion('underline')}><Underline size={14} /></Button>
-              </div>
-            </div>
-            <div
-              id="question-display"
-              ref={questionRef}
-              className="essay-sheet min-h-28 rounded-md border border-line px-3 py-2 outline-none"
-              contentEditable={!busy}
-              role="textbox"
-              aria-multiline="true"
-              data-placeholder={config.questionPlaceholder}
-              onInput={(event) => setQuestion(event.currentTarget.innerText)}
-            />
-            <textarea id="question-input" className="sr-only" value={question} readOnly tabIndex={-1} aria-hidden="true" />
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <Button id="generate-question-btn" tone="quiet" onClick={generateQuestion} disabled={generating || busy}>
-                {generating ? 'Generating…' : 'Generate question'}
-              </Button>
-              <label className="cursor-pointer rounded-md border border-line px-3 py-2 text-sm font-semibold">
-                Upload question image
-                <input id="image-input" ref={imageRef} className="sr-only" type="file" accept="image/*" onChange={onImage} />
+      <main className="workspace">
+        <form id="ielts-form" className="script" onSubmit={onSubmit}>
+          <div className="script-body">
+            <div className="field-row">
+              <label className="field" id="target-label">
+                {config.targetLabel}
+                <select id="band-select" value={target} onChange={(event) => setTarget(event.target.value)} required>
+                  {config.targetValues.map((value) => <option key={value} value={value}>{value}</option>)}
+                </select>
               </label>
-              <span id="image-file-name" className="text-sm text-muted">{imageName || 'No image selected'}</span>
+              <label className="field" id="part-label">
+                {mode === 'PTE' ? 'Writing task' : 'Writing part'}
+                <select id="part-select" value={part} onChange={(event) => setPart(event.target.value)} required>
+                  {Object.entries(config.tasks).map(([value, item]) => <option key={value} value={value}>{item.label}</option>)}
+                </select>
+              </label>
             </div>
-            {imagePreview ? <img id="image-preview" className="mt-3 max-h-40 rounded-md border border-line" src={imagePreview} alt="Question preview" /> : <div id="image-preview" />}
-          </div>
 
-          <div className="mt-5">
-            <Button tone="quiet" id="show-note-btn" onClick={() => setNotesOpen((open) => !open)}>
-              {notesOpen ? 'Hide note card' : 'Create note card'}
+            <div>
+              <div className="prompt-head">
+                <label id="question-label" htmlFor="question-display">Question</label>
+                <div role="group" aria-label="Prompt marks">
+                  <Button id="btn-highlight" tone="quiet" onClick={() => markQuestion('hiliteColor')}><Highlighter size={14} /> Highlight</Button>
+                  <Button id="btn-underline" tone="quiet" onClick={() => markQuestion('underline')}><Underline size={14} /> Underline</Button>
+                </div>
+              </div>
+              <div
+                id="question-display"
+                ref={questionRef}
+                className="prompt"
+                contentEditable={!busy}
+                role="textbox"
+                aria-multiline="true"
+                aria-labelledby="question-label"
+                data-placeholder={config.questionPlaceholder}
+                onInput={(event) => setQuestion(event.currentTarget.innerText)}
+              />
+              <textarea id="question-input" className="sr-only" value={question} readOnly tabIndex={-1} aria-hidden="true" />
+              <div className="tool-row">
+                <Button id="generate-question-btn" tone="quiet" onClick={generateQuestion} disabled={generating || busy}>
+                  {generating ? 'Generating…' : 'Generate question'}
+                </Button>
+                <label className="file-btn">
+                  Upload question image
+                  <input id="image-input" ref={imageRef} className="sr-only" type="file" accept="image/*" onChange={onImage} />
+                </label>
+                <span id="image-file-name" className="file-name">{imageName}</span>
+              </div>
+              {notice ? <p className="notice" role="alert">{notice}</p> : null}
+              {imagePreview ? (
+                <div className="preview">
+                  <img id="image-preview" src={imagePreview} alt="Question preview" />
+                  <Button tone="quiet" onClick={clearImage}>Remove image</Button>
+                </div>
+              ) : <div id="image-preview" />}
+            </div>
+
+            <div>
+              <Button tone="quiet" id="show-note-btn" onClick={() => setNotesOpen((open) => !open)} aria-expanded={notesOpen}>
+                {notesOpen ? 'Hide planning notes' : 'Add planning notes'}
+              </Button>
+              {notesOpen ? (
+                <textarea id="note-input" className="notes" rows={4} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Point, example, result" />
+              ) : null}
+            </div>
+
+            <div className="answer-block">
+              <div className="answer-head">
+                <label htmlFor="answer-input">Your answer</label>
+                <Button tone="quiet" aria-label="Expand answer editor" onClick={() => setExpanded(true)}>Expand</Button>
+              </div>
+              <textarea id="answer-input" className="script-area" value={answer} onChange={(event) => setAnswer(event.target.value)} required placeholder="Paste or type your answer here." />
+            </div>
+          </div>
+          <div className="script-bar">
+            <div className="count-row">
+              <div className="meter" data-tone={countWarn ? 'short' : 'ready'} aria-hidden="true">
+                <span style={{ width: `${meterWidth}%` }} />
+              </div>
+              <p id="word-count" className={countTone}>{count} words · {task.guidance}</p>
+            </div>
+            <Button id="submit-btn" tone="pen" type="submit" disabled={busy}>
+              {busy ? 'Marking…' : 'Mark this draft'}
             </Button>
-            {notesOpen ? (
-              <textarea id="note-input" className="mt-2 w-full rounded-md border border-line bg-sheet p-3" rows={4} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Planning notes" />
-            ) : null}
           </div>
-
-          <div className="mt-5">
-            <div className="mb-2 flex items-center justify-between">
-              <label className="text-sm font-semibold" htmlFor="answer-input">Your answer</label>
-              <Button tone="quiet" aria-label="Expand answer editor" onClick={() => setExpanded(true)}>Expand</Button>
-            </div>
-            <textarea id="answer-input" className="essay-sheet min-h-40 w-full rounded-md border border-line bg-sheet px-3 py-2" value={answer} onChange={(event) => setAnswer(event.target.value)} required placeholder="Paste or type your answer here." />
-            <p id="word-count" className={`mt-2 text-sm tabular-nums ${countTone}`}>{count} words · {task.guidance}</p>
-          </div>
-
-          <Button id="submit-btn" tone="pen" className="mt-5 w-full py-3 text-base" type="submit" disabled={busy}>
-            {busy ? 'Evaluating…' : 'Evaluate deeply'}
-          </Button>
         </form>
 
-        <section id="result-section" className="bg-desk p-4 md:overflow-auto md:p-8" aria-live="polite">
-          {phase === 'loading' ? (
-            <div id="loading-state">
-              <p className="text-2xl font-semibold">Specialist agents are reading your essay.</p>
-              <ul className="mt-4 space-y-2 text-sm">
-                {['Examiner', 'Diagnosis', 'Coach', 'Synthesis'].map((name, index) => (
-                  <li key={name} className={index === tip ? 'font-semibold text-pen' : 'text-muted'}>{name}</li>
-                ))}
-              </ul>
-              <p id="loader-tip" className="mt-6 max-w-[46ch] leading-7">{LOADER_TIPS[tip]}</p>
-            </div>
-          ) : (
-            <div ref={reportRef}>
-              {phase === 'empty' ? <div id="empty-state"><Report report={null} /></div> : <Report report={report} onExport={exportPdf} exporting={exporting} />}
-            </div>
-          )}
+        <section id="result-section" className="mark-panel" aria-live="polite">
+          <div className="mark-body" ref={reportRef}>
+            {phase === 'loading' ? (
+              <div id="loading-state" className="loading-sheet">
+                <h2>The examiner is reading this draft.</h2>
+                <ol>
+                  {LOADER_NAMES.map((name, index) => (
+                    <li key={name} aria-current={index === tip ? 'step' : undefined}>{name}</li>
+                  ))}
+                </ol>
+                <p id="loader-tip">{LOADER_TIPS[tip]}</p>
+              </div>
+            ) : (
+              <Report report={phase === 'empty' ? null : report} mode={mode} part={part} target={target} onExport={exportPdf} exporting={exporting} />
+            )}
+          </div>
         </section>
       </main>
 
       {expanded ? (
-        <div className="fixed inset-0 z-30 grid place-items-center bg-ink/40 p-4" role="dialog" aria-modal="true" aria-labelledby="answer-modal-title">
-          <div className="flex h-[80vh] w-full max-w-3xl flex-col rounded-lg bg-sheet p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 id="answer-modal-title" className="text-lg font-semibold">Your answer</h2>
+        <div className="veil" role="dialog" aria-modal="true" aria-labelledby="answer-modal-title">
+          <div className="modal">
+            <header>
+              <h2 id="answer-modal-title">Your answer</h2>
               <Button tone="quiet" aria-label="Collapse editor" onClick={() => setExpanded(false)}>Close</Button>
-            </div>
-            <textarea id="answer-modal-input" className="essay-sheet min-h-0 flex-1 rounded-md border border-line p-3" value={answer} onChange={(event) => setAnswer(event.target.value)} />
-            <p id="answer-modal-word-count" className="mt-2 text-sm tabular-nums">{count} words · {task.guidance}</p>
+            </header>
+            <textarea id="answer-modal-input" className="script-area" value={answer} onChange={(event) => setAnswer(event.target.value)} />
+            <p id="answer-modal-word-count" className="count-row">{count} words · {task.guidance}</p>
           </div>
         </div>
       ) : null}
 
       {timerOpen ? (
-        <div id="timer-panel" className="fixed right-4 top-16 z-20 w-72 rounded-lg border border-line bg-sheet p-4 shadow-[0_16px_40px_-24px_rgba(23,32,51,0.45)]">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="font-semibold">Exam timer</h2>
+        <div id="timer-panel" className="timer-panel">
+          <header>
+            <h2>Exam timer</h2>
             <Button tone="quiet" aria-label="Close timer" onClick={() => setTimerOpen(false)}>Close</Button>
-          </div>
-          <p id="timer-display" className="text-center text-4xl font-semibold tabular-nums">{clock}</p>
-          <div className="mt-3 flex flex-wrap gap-2">
+          </header>
+          <p id="timer-display" className="clock" data-urgent={timerLeft < 60 && (timerOn || timerLeft === 0)}>{clock}</p>
+          <div className="preset-row">
             {[5, 10, 20, 40, 60].map((minutes) => (
               <Button key={minutes} tone="quiet" disabled={timerOn} onClick={() => { setTimerSeconds(minutes * 60); setTimerLeft(minutes * 60); }}>{minutes}m</Button>
             ))}
           </div>
-          <div className="mt-4 flex gap-2">
+          <div className="timer-actions">
             <Button id="timer-start" tone="pen" onClick={() => setTimerOn((on) => !on)}>{timerOn ? 'Pause' : 'Start'}</Button>
-            <Button id="timer-reset" tone="quiet" onClick={() => { setTimerOn(false); setTimerLeft(timerSeconds); }}>Reset</Button>
+            <Button id="timer-reset" tone="quiet" onClick={() => { setTimerOn(false); setTimerLeft(timerSeconds); setTimeUp(false); }}>Reset</Button>
           </div>
         </div>
       ) : null}
 
       {timeUp ? (
-        <div className="fixed inset-0 z-40 grid place-items-center bg-ink/50 p-4" role="dialog" aria-modal="true" aria-label="Time is up">
-          <div className="max-w-sm rounded-lg bg-sheet p-6">
-            <h2 className="text-2xl font-semibold">Time is up.</h2>
-            <p className="mt-2 leading-6 text-muted">Your timed session has ended. You can keep writing.</p>
-            <Button id="timer-timeout-dismiss" tone="pen" className="mt-4" onClick={() => setTimeUp(false)}>Continue writing</Button>
+        <div className="veil" role="dialog" aria-modal="true" aria-label="Time is up">
+          <div className="dialog">
+            <h2>Time is up.</h2>
+            <p>Your timed session has ended. You can keep writing.</p>
+            <div className="dialog-actions">
+              <Button id="timer-timeout-dismiss" tone="pen" onClick={() => setTimeUp(false)}>Continue writing</Button>
+            </div>
           </div>
         </div>
       ) : null}
 
-      <Button id="draggable-chatbot" tone="pen" className="fixed bottom-5 right-5 z-20 h-12 w-12 rounded-full p-0" aria-label="Open writing assistant" onClick={() => setChatOpen(true)}>
-        <MessageSquare size={18} />
-      </Button>
+      {confirm ? (
+        <div className="veil" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+          <div className="dialog">
+            <h2 id="confirm-title">Check this draft</h2>
+            <p>{confirmCopy}</p>
+            <div className="dialog-actions">
+              <Button tone="quiet" onClick={() => setConfirm(null)}>Keep writing</Button>
+              <Button tone="pen" onClick={runEvaluation}>Mark this draft</Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {chatOpen ? (
-        <section id="chatbox" className="fixed bottom-20 right-5 z-20 flex h-96 w-[min(100vw-2rem,22rem)] flex-col rounded-lg border border-line bg-sheet shadow-[0_18px_40px_-24px_rgba(23,32,51,0.5)]">
-          <div className="flex items-center justify-between border-b border-line px-3 py-2">
-            <h2 className="text-sm font-semibold">Writing assistant</h2>
+        <section id="chatbox" className="chat-panel" aria-label="Writing assistant">
+          <header>
+            <h2>Writing assistant</h2>
             <Button id="close-chatbox" tone="quiet" aria-label="Close chat" onClick={() => setChatOpen(false)}>Close</Button>
-          </div>
-          <div id="chatbox-messages" className="flex-1 space-y-3 overflow-auto p-3 text-sm leading-6">
+          </header>
+          <div id="chatbox-messages" className="chat-log">
+            {messages.length === 0 ? <p className="chat-empty">Ask about the task, this mark, or the next drill.</p> : null}
             {messages.map((item, index) => (
-              <p key={`${item.role}-${index}`} className={item.role === 'user' ? 'text-right' : ''} dangerouslySetInnerHTML={{ __html: escapeMessage(item.content) }} />
+              <p key={`${item.role}-${index}`} className={item.role === 'user' ? 'bubble bubble-user' : 'bubble'} dangerouslySetInnerHTML={{ __html: escapeMessage(item.content) }} />
             ))}
+            {chatBusy ? <p className="chat-empty">The examiner is reading your question.</p> : null}
           </div>
-          <form id="chatbox-form" className="flex gap-2 border-t border-line p-2" onSubmit={sendChat}>
-            <textarea id="chatbox-input" className="min-h-12 flex-1 rounded-md border border-line p-2" value={chatInput} onChange={(event) => setChatInput(event.target.value)} placeholder={config.chatPlaceholder} required maxLength={1000} />
-            <Button tone="pen" type="submit">Send</Button>
+          <form id="chatbox-form" className="chat-form" onSubmit={sendChat}>
+            <textarea id="chatbox-input" value={chatInput} onChange={(event) => setChatInput(event.target.value)} placeholder={config.chatPlaceholder} required maxLength={1000} />
+            <Button tone="pen" type="submit" disabled={chatBusy}>Send</Button>
           </form>
         </section>
       ) : null}

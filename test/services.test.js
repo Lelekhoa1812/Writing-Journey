@@ -302,3 +302,30 @@ test('generateQuestion falls back after malformed SLM output', async () => {
   assert.match(generated.question, /governments|people/i);
   assert.equal(generated.agentTraceSummary[0].ok, false);
 });
+
+test('evaluateWriting sends planning notes to the specialist agents', async () => {
+  const seen = [];
+  const responses = [
+    '{"taskType":"Part 2","promptRequirements":["state opinion"],"userThesis":"Agree","paragraphMap":[],"constraints":[],"wordCount":8}',
+    '{"criteria":{"TR":{"score":6,"reason":"Thin","evidence":["plan"],"nextStep":"develop"},"CC":{"score":6,"reason":"Order","evidence":["order"],"nextStep":"keep"},"LR":{"score":6,"reason":"Words","evidence":["words"],"nextStep":"keep"},"GR":{"score":6,"reason":"Grammar","evidence":["grammar"],"nextStep":"keep"}}}',
+    '{"diagnostics":[],"ideaInsights":[],"cohesionMap":[]}',
+    '{"correction":"A corrected draft.","sentenceInsights":[],"vocabularyUpgrades":[],"grammarPatterns":[]}',
+    '{"modelAnswer":"A model.","modelAnswerNotes":[]}',
+    '{"practicePlan":[{"priority":1,"focus":"Plan","drill":"use the plan","successSignal":"the plan appears"}]}',
+    '{"overview":"Noted.","targetBandGap":[],"topPriorities":[],"encouragement":"Continue."}',
+  ];
+  let index = 0;
+  await evaluateWriting(
+    { band: '7.0', part: '2', question: 'Discuss both views.', answer: 'Technology helps students learn.', notes: 'Point then a local example.' },
+    {
+      client: {},
+      callModel: async ({ user }) => {
+        seen.push(user);
+        return responses[index++];
+      },
+      model: 'main',
+      slm: 'small',
+    },
+  );
+  assert.ok(seen.some((user) => user.includes('Candidate plan:') && user.includes('Point then a local example.')));
+});
